@@ -6,6 +6,8 @@ import lombok.Setter;
 import javax.persistence.*;
 import java.io.Serializable;
 import java.math.BigDecimal;
+import java.util.HashSet;
+import java.util.Set;
 
 @Getter
 @Setter
@@ -38,6 +40,10 @@ public class Cliente implements Serializable {
     @ManyToOne
     @JoinColumn(name = "COD_ENDERECO")
     private Endereco endereco;
+
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(name ="CLIENTE_ASSINATURA", joinColumns = @JoinColumn(name = "CNPJ_CPF"), inverseJoinColumns = @JoinColumn(name="ID_PRODUTO"))
+    private Set<Produto> produtos = new HashSet<>();
 
     public Cliente(){}
 

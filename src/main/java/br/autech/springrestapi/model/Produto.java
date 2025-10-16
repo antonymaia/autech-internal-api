@@ -21,8 +21,7 @@ public class Produto implements Serializable {
     private String idProduto;
     private String nome;
     private BigDecimal valor;
-    @ManyToMany(fetch = FetchType.LAZY)
-    private Set<Cliente> clientes = new HashSet<>();
+
 
     public Produto() {
     }

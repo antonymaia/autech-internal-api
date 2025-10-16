@@ -20,7 +20,7 @@ public class Assinatura {
 
     @Enumerated(EnumType.STRING)
     private TipoAssinatura tipoAssinatura;
-    @ManyToOne
+    @OneToOne
     @JoinColumn(name = "id_cliente")
     private Cliente cliente;
 }
