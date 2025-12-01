@@ -55,7 +55,7 @@ public class DBService {
         endereco1.setId(1L);
         endereco2.setId(2L);
 
-        Cliente cliente1 = new Cliente(
+      /*  Cliente cliente1 = new Cliente(
                 "12987285418",
                 "ANTONY MAIA",
                 "81983445854",
@@ -78,6 +78,6 @@ public class DBService {
                 "",
                 endereco2);
         List<Cliente> clientes = Arrays.asList(cliente1,cliente2);
-        clienteRepository.saveAll(clientes);
+        clienteRepository.saveAll(clientes); */
     }
 }

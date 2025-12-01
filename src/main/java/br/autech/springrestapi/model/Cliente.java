@@ -41,8 +41,7 @@ public class Cliente implements Serializable {
     @JoinColumn(name = "COD_ENDERECO")
     private Endereco endereco;
 
-    @OneToOne
-    @JoinColumn(name = "assinatura_id")
+    @OneToOne(mappedBy = "cliente")
     private Assinatura assinatura;
 
     public Cliente(){}

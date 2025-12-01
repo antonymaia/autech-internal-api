@@ -1,27 +1,51 @@
 package br.autech.springrestapi.model;
 
+import br.autech.springrestapi.model.enums.StatusAssinatura;
 import br.autech.springrestapi.model.enums.TipoAssinatura;
-import org.apache.tomcat.jni.Local;
+import com.fasterxml.jackson.annotation.JsonManagedReference;
+import lombok.Getter;
+import lombok.Setter;
+
 
 import javax.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
-@Table(name = "ASSINATURAS")
+@Table(name = "ASSINATURA")
+@Getter
+@Setter
 @Entity
 public class Assinatura {
 
     @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name="ID_ASSINATURA")
     private Long id;
-    private LocalDate dataInicial;
-    private LocalDate dataFinal;
+    private LocalDate data_inicio;
+    private LocalDate data_fim;
     @Column(precision = 18, scale = 2)
-    private BigDecimal valorTotal;
+    private BigDecimal valor_total;
 
     @Enumerated(EnumType.STRING)
-    private TipoAssinatura tipoAssinatura;
+    private TipoAssinatura tipo_assinatura;
 
     @OneToOne
     @JoinColumn(name = "id_cliente")
+    @JsonManagedReference
     private Cliente cliente;
+
+    @Enumerated(EnumType.STRING)
+    private StatusAssinatura status;
+
+    public Assinatura() {
+    }
+
+    public Assinatura(LocalDate data_inicio, LocalDate data_fim, BigDecimal valor_total, TipoAssinatura tipo_assinatura,  Cliente cliente, StatusAssinatura status) {
+        this.data_inicio =  data_inicio;
+        this.data_fim = data_fim;
+        this.valor_total = valor_total;
+        this.tipo_assinatura = tipo_assinatura;
+        this.cliente = cliente;
+        this.status = status;
+    }
 }
