@@ -41,9 +41,9 @@ public class Cliente implements Serializable {
     @JoinColumn(name = "COD_ENDERECO")
     private Endereco endereco;
 
-    @ManyToMany(fetch = FetchType.LAZY)
-    @JoinTable(name ="CLIENTE_ASSINATURA", joinColumns = @JoinColumn(name = "CNPJ_CPF"), inverseJoinColumns = @JoinColumn(name="ID_PRODUTO"))
-    private Set<Produto> produtos = new HashSet<>();
+    @OneToOne
+    @JoinColumn(name = "assinatura_id")
+    private Assinatura assinatura;
 
     public Cliente(){}
 
