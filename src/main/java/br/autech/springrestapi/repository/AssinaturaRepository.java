@@ -9,6 +9,9 @@ import java.util.Optional;
 
 public interface AssinaturaRepository extends JpaRepository<Assinatura,Integer> {
 
-    @Query(value = "SELECT * FROM ASSINATURA   WHERE id_cliente = :clienteId" , nativeQuery = true)
-    Optional<Assinatura> findByClienteId(@Param("clienteId") String clienteId);
+
+    Optional<Assinatura> findByCliente_CnpjCpf(@Param("clienteId") String clienteId);
+
+
+
 }

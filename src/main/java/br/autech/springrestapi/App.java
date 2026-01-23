@@ -42,7 +42,7 @@ public class App implements CommandLineRunner {
 		BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
 		return encoder;
 	}
-
+        
     public void run(String... args) throws Exception {
 
 

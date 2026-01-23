@@ -1,5 +1,6 @@
 package br.autech.springrestapi.controller;
 
+import br.autech.springrestapi.dtos.AssinaturaDTO;
 import br.autech.springrestapi.model.Assinatura;
 import br.autech.springrestapi.model.Cidade;
 import br.autech.springrestapi.model.Cliente;
@@ -29,21 +30,22 @@ public class AssinaturaController {
     }
 
     @PostMapping
-    public ResponseEntity<?> inserirAssinatura (@RequestBody Assinatura assinatura) {
+    public ResponseEntity<?> inserirAssinatura (@RequestBody AssinaturaDTO assinatura) {
 
 
-       assinaturaService.inserirAssinatura(assinatura, assinatura.getCliente().getCnpjCpf());
+    Assinatura assinaturaSalva =   assinaturaService.inserirAssinatura(assinatura);
 
         URI uri = ServletUriComponentsBuilder.fromCurrentRequest()
-                .path("/{id}").buildAndExpand(assinatura.getId()).toUri();
+                .path("/{id}").buildAndExpand(assinaturaSalva.getId()).toUri();
 
         return ResponseEntity.created(uri).build();
     }
 
-    @PutMapping("/{cnpjCpf}")
-    public ResponseEntity<?> atualizarStatusAssinatura (@PathVariable String cnpjCpf,  @RequestBody Assinatura assinatura ){
-        assinaturaService.atualizarStatusPorCliente(cnpjCpf, assinatura.getStatus() );
-        return ResponseEntity.ok().build();
+    @PutMapping
+    public ResponseEntity<?> atualizarAssinatura ( @RequestBody AssinaturaDTO assinaturaDTO){
+      Assinatura assinatura =  assinaturaService.atualizarAssinatura(assinaturaDTO);
+      System.out.println("assinatura: "+assinatura);
+        return ResponseEntity.ok(assinatura);
     }
 
 
