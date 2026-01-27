@@ -1,11 +1,14 @@
 package br.autech.springrestapi.model;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
 import lombok.Getter;
 import lombok.Setter;
 
 import javax.persistence.*;
 import java.io.Serializable;
 import java.math.BigDecimal;
+import java.util.HashSet;
+import java.util.Set;
 
 @Getter
 @Setter
@@ -39,19 +42,24 @@ public class Cliente implements Serializable {
     @JoinColumn(name = "COD_ENDERECO")
     private Endereco endereco;
 
-    public Cliente(){}
-
-    public Cliente(String cnpjCpf, String nome, String telefone, String email, String ativo, String diaVencimento, String bloqueado, String numeroEndereco, String complementoEndereco, Endereco endereco) {
+    @OneToOne(mappedBy = "cliente")
+    @JsonBackReference
+    private Assinatura assinatura;
+    public Cliente() {}
+    public Cliente(String cnpjCpf, String nome, String razaoSocialNome, String nomeResponsavel, Endereco endereco, BigDecimal valorMensalidade, String complementoEndereco, String numeroEndereco, String bloqueado, String diaVencimento, String ativo, String email, String telefone) {
         this.cnpjCpf = cnpjCpf;
         this.nome = nome;
-        this.telefone = telefone;
-        this.email = email;
-        this.ativo = ativo;
-        this.diaVencimento = diaVencimento;
-        this.bloqueado = bloqueado;
-        this.numeroEndereco = numeroEndereco;
-        this.complementoEndereco = complementoEndereco;
+        this.razaoSocialNome = razaoSocialNome;
+        this.nomeResponsavel = nomeResponsavel;
         this.endereco = endereco;
+        this.valorMensalidade = valorMensalidade;
+        this.complementoEndereco = complementoEndereco;
+        this.numeroEndereco = numeroEndereco;
+        this.bloqueado = bloqueado;
+        this.diaVencimento = diaVencimento;
+        this.ativo = ativo;
+        this.email = email;
+        this.telefone = telefone;
     }
 
     @PrePersist
@@ -69,4 +77,19 @@ public class Cliente implements Serializable {
     }
 
 
+    @Override
+    public String toString() {
+        return "{" +
+                "cnpjCpf=" + cnpjCpf +
+                ", nome=" + nome +
+                ", telefone=" + telefone +
+                ", email=" + email +
+                 ", ativo=" + ativo +
+                 ", diaVencimento=" + diaVencimento +
+                ", bloqueado=" + bloqueado +
+                ", numeroEndereco= " + numeroEndereco +
+                ", complementoEndereco" + complementoEndereco;
+
+
+        }
 }

@@ -250,7 +250,7 @@ public class ClienteService {
         if(!ativo.equalsIgnoreCase("S") && !ativo.equalsIgnoreCase("N"))
             throw new BadRequestException("Valor inválido, utilize 'S'ou 'N'");
 
-        return clienteRepository.countByAtivo(ativo);
+        return (Long) (Long) clienteRepository.countByAtivo(ativo);
     }
 
     public Long countClientesByBloqueado(String bloqueado) {
