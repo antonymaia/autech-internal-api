@@ -25,6 +25,7 @@ public class Assinatura {
     private LocalDate data_fim;
     @Column(precision = 18, scale = 2)
     private BigDecimal valor_total;
+    private int quantidade_caixa;
 
     @Enumerated(EnumType.STRING)
     private TipoAssinatura tipo_assinatura;
@@ -40,12 +41,14 @@ public class Assinatura {
     public Assinatura() {
     }
 
-    public Assinatura(LocalDate data_inicio, LocalDate data_fim, BigDecimal valor_total, TipoAssinatura tipo_assinatura,  Cliente cliente, StatusAssinatura status) {
+    public Assinatura(LocalDate data_inicio, LocalDate data_fim, BigDecimal valor_total, TipoAssinatura tipo_assinatura,  Cliente cliente, StatusAssinatura status, int quantidade_caixa) {
         this.data_inicio =  data_inicio;
         this.data_fim = data_fim;
         this.valor_total = valor_total;
         this.tipo_assinatura = tipo_assinatura;
         this.cliente = cliente;
         this.status = status;
+        this.quantidade_caixa = quantidade_caixa;
+
     }
 }
