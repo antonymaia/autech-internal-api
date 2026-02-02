@@ -21,6 +21,8 @@ public class AssinaturaDTO {
     private String cnpjCpfCliente;
     @Getter
     private StatusAssinatura status;
+    @Getter
+    private int quantdade_caixa;
 
 
 
