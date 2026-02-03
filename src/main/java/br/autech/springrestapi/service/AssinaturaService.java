@@ -63,7 +63,7 @@ public class AssinaturaService {
         assinatura.setData_inicio(assinaturaDTO.getData_inicio());
         assinatura.setStatus(assinaturaDTO.getStatus());
         assinatura.setTipo_assinatura(assinaturaDTO.getTipoAssinatura());
-        assinatura.setQuantidade_caixa(assinaturaDTO.getQuantdade_caixa());
+        assinatura.setQuantidade_caixa(assinaturaDTO.getQuantidade_caixa());
 
         return assinaturaRepository.save(assinatura);
         }

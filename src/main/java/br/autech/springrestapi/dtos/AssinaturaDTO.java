@@ -22,7 +22,7 @@ public class AssinaturaDTO {
     @Getter
     private StatusAssinatura status;
     @Getter
-    private int quantdade_caixa;
+    private int quantidade_caixa;
 
 
 

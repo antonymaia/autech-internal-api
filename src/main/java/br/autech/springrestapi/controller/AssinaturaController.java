@@ -20,7 +20,9 @@ import java.util.Optional;
 @RequestMapping("/assinatura")
 public class AssinaturaController {
  @Autowired
-    private AssinaturaService assinaturaService;
+ private AssinaturaService assinaturaService;
+
+
 
 
     @GetMapping
@@ -38,7 +40,7 @@ public class AssinaturaController {
         URI uri = ServletUriComponentsBuilder.fromCurrentRequest()
                 .path("/{id}").buildAndExpand(assinaturaSalva.getId()).toUri();
 
-        return ResponseEntity.created(uri).build();
+        return ResponseEntity.created(uri).body(assinaturaSalva);
     }
 
     @PutMapping
