@@ -18,9 +18,13 @@ public class Produto implements Serializable {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name="ID_PRODUTO")
-    private String idProduto;
+    private Long idProduto;
+    @Column(name = "NOME")
     private String nome;
+    @Column(name = "VALOR")
     private BigDecimal valor;
+  ;
+
 
 
     public Produto() {

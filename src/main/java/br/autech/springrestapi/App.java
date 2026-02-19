@@ -23,7 +23,7 @@ import java.time.LocalDate;
 @SpringBootApplication(exclude = { SecurityAutoConfiguration.class})
 @EnableScheduling
 public class App implements CommandLineRunner {
-   @Autowired
+   @Autowired    
    private ClienteService ClienteService;
    @Autowired
    private AssinaturaRepository assinaturaRepository;

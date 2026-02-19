@@ -26,8 +26,8 @@ public class AssinaturaController {
 
 
     @GetMapping
-    public ResponseEntity<Assinatura> buscarAssinatura(@RequestParam String cnpjCpf ) throws Exception {
-       Assinatura assinatura = assinaturaService.buscarAssinatura(cnpjCpf);
+    public ResponseEntity<AssinaturaDTO> buscarAssinatura(@RequestParam String cnpjCpf ) throws Exception {
+       AssinaturaDTO assinatura = assinaturaService.buscarAssinatura(cnpjCpf);
         return ResponseEntity.ok().body(assinatura);
     }
 
@@ -40,7 +40,7 @@ public class AssinaturaController {
         URI uri = ServletUriComponentsBuilder.fromCurrentRequest()
                 .path("/{id}").buildAndExpand(assinaturaSalva.getId()).toUri();
 
-        return ResponseEntity.created(uri).body(assinaturaSalva);
+        return ResponseEntity.created(uri).body(assinaturaSalva)    ;
     }
 
     @PutMapping

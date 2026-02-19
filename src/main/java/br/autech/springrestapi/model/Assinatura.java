@@ -1,5 +1,6 @@
 package br.autech.springrestapi.model;
 
+import br.autech.springrestapi.dtos.AssinaturaProdutoDTO;
 import br.autech.springrestapi.model.enums.StatusAssinatura;
 import br.autech.springrestapi.model.enums.TipoAssinatura;
 import com.fasterxml.jackson.annotation.JsonManagedReference;
@@ -10,6 +11,7 @@ import lombok.Setter;
 import javax.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 @Table(name = "ASSINATURA")
 @Getter
@@ -37,6 +39,11 @@ public class Assinatura {
 
     @Enumerated(EnumType.STRING)
     private StatusAssinatura status;
+    @OneToMany(
+            mappedBy = "assinatura", fetch = FetchType.LAZY
+    )
+    @JsonManagedReference
+    private List<AssinaturaProduto> assinaturaProdutos;
 
     public Assinatura() {
     }
@@ -51,4 +58,6 @@ public class Assinatura {
         this.quantidade_caixa = quantidade_caixa;
 
     }
+
+
 }
