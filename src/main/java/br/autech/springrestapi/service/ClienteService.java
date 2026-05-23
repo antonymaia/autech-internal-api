@@ -260,6 +260,11 @@ public class ClienteService {
         return clienteRepository.countByBloqueadoAndAtivo(bloqueado, "S");
     }
 
+    public List<Cliente> buscarClientesPorDiaVencimento(int diaVencimento, String ativo) {
+        String dia = diaVencimento < 10 ? "0" + diaVencimento : String.valueOf(diaVencimento);
+        return clienteRepository.findAllByDiaVencimentoAndAtivo(dia, ativo);
+    }
+
     public List<Cliente> buscarClientesPorDiaVencimentoa5dias() {
         LocalDate diatAtual = LocalDate.now();
         String diaVencimento = (diatAtual.getDayOfMonth() + 5 ) < 10 ? "0" + (diatAtual.getDayOfMonth() + 5 ) : Integer.toString(diatAtual.getDayOfMonth() + 5 );

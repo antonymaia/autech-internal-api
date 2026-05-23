@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="pt-br" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Aviso de Cobrança</title>
+</head>
+<body>
+    <div style="font-family: Arial, sans-serif; max-width: 600px;">
+        <div>
+            <h3 style="font-size: 24px">Olá, <span th:text="${nomeCliente}">Cliente</span>!</h3>
+        </div>
+        <div>
+            <span style="font-size: 18px">
+                Sua fatura vence amanhã, <strong th:text="${dataVencimento}">00/00/0000</strong>.
+                Entre em contato com o financeiro para realizar o pagamento.
+            </span>
+        </div>
+        <div style="padding: 15px 0">
+            <span style="font-weight: bold; font-size: 18px">Valor da fatura: </span>
+            <span style="font-size: 18px" th:text="'R$ ' + ${valorFatura}">R$ 0,00</span>
+        </div>
+        <div style="font-size: 18px">A Autech agradece a sua atenção.</div>
+    </div>
+</body>
+</html>

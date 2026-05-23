@@ -10,4 +10,5 @@ import java.util.List;
 public interface FaturaRepository extends JpaRepository<Fatura, Long> {
     List<Fatura> findAllByCliente(Cliente cliente);
     List<Fatura> findAllByDataVencimentoIsBeforeAndEstado(LocalDate dataAtual, Integer estado);
+    List<Fatura> findAllByDataVencimentoAndEstado(LocalDate dataVencimento, Integer estado);
 }

@@ -1,0 +1,10 @@
+services:
+  internalapi:
+    build: .
+    container_name: internalapi
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - TZ=America/Sao_Paulo

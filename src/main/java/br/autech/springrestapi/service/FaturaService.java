@@ -11,8 +11,14 @@ import jakarta.mail.*;
 import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.env.Environment;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
+import org.springframework.mail.MailException;
+import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.mail.javamail.MimeMessagePreparator;
 import org.springframework.stereotype.Service;
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -21,9 +27,14 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class FaturaService {
@@ -33,6 +44,9 @@ public class FaturaService {
     private final ResourceLoader resourceLoader;
     private final PagamentoFaturaRepository pagamentoFaturaRepository;
     private final PagamentoRepository pagamentoRepository;
+    private final JavaMailSender mailSender;
+    private final TemplateBuilder templateBuilder;
+    private final Environment environment;
 
     public Fatura buscarPorId(Long id){
         return faturaRepository.findById(id).orElseThrow(() -> {
@@ -164,5 +178,46 @@ public class FaturaService {
             fatura.setEstado(EstadoFatura.VENCIDA);
             faturaRepository.save(fatura);
         });
+    }
+
+    public void enviarAvisosCobranca1DiaAntes() {
+        ZoneId brasilZone = ZoneId.of("America/Sao_Paulo");
+        LocalDate amanha = LocalDate.now(brasilZone).plusDays(1);
+
+        List<Fatura> faturas = faturaRepository.findAllByDataVencimentoAndEstado(amanha, 1);
+
+        faturas.forEach(fatura -> {
+            Cliente cliente = fatura.getCliente();
+            if (cliente.getEmail() != null && !cliente.getEmail().isBlank()) {
+                enviarEmailAvisoCobranca1Dia(fatura);
+            }
+        });
+    }
+
+    private void enviarEmailAvisoCobranca1Dia(Fatura fatura) {
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+        String nomeResponsavel = fatura.getCliente().getNomeResponsavel();
+        String nomeCliente = (nomeResponsavel != null && !nomeResponsavel.isBlank())
+                ? nomeResponsavel
+                : fatura.getCliente().getNome();
+
+        Map<String, Object> variables = new HashMap<>();
+        variables.put("nomeCliente", nomeCliente);
+        variables.put("dataVencimento", fatura.getDataVencimento().format(formatter));
+        variables.put("valorFatura", fatura.getValor());
+
+        MimeMessagePreparator messagePreparator = mimeMessage -> {
+            MimeMessageHelper messageHelper = new MimeMessageHelper(mimeMessage);
+            messageHelper.setFrom(Objects.requireNonNull(environment.getProperty("spring.mail.username")));
+            messageHelper.setTo(fatura.getCliente().getEmail());
+            messageHelper.setSubject("Autech - Aviso de cobrança");
+            messageHelper.setText(templateBuilder.build("email-aviso-cobranca", variables), true);
+        };
+
+        try {
+            mailSender.send(messagePreparator);
+        } catch (MailException e) {
+            log.error("Erro ao enviar email de cobrança para {}: {}", fatura.getCliente().getEmail(), e.getMessage());
+        }
     }
 }
