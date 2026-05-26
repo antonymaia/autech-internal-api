@@ -29,29 +29,6 @@ public class PagamentoTask {
 
     private static final ZoneId BRASIL = ZoneId.of("America/Sao_Paulo");
 
-    @Scheduled(cron = "0 0 6 * * *")
-    public void enviarEmailClienteLicencaVencida() {
-        log.info("[Enviando emails para licenças que expiram hoje] Inicializando...");
-        LocalDate date = LocalDate.now(BRASIL);
-        List<Cliente> clientes = clienteService.buscarClientesPorDiaVencimentoAtivo(date.getDayOfMonth(), "S");
-        clientes.forEach(clienteService::enviarEmailLicencaVencida);
-        log.info("[Enviando emails para licenças que expiram hoje] finalizado com sucesso.");
-    }
-
-    @Scheduled(cron = "0 0 3 * * *")
-    public void gerarFaturaCliente() {
-        log.info("[Gerando faturas 5 dias antes do vencimento] Inicializando...");
-        faturaService.gerarFaturas5dias();
-        log.info("[Gerando faturas 5 dias antes do vencimento] finalizado com sucesso");
-    }
-
-    @Scheduled(cron = "0 0 2 * * *")
-    public void atualizarEstadoFatura() {
-        log.info("[Atualizar estado das faturas] Inicializando...");
-        faturaService.atualizarEstadoFatura();
-        log.info("[Atualizar estado das faturas] finalizado com sucesso...");
-    }
-
     @Scheduled(cron = "0 30 6 * * *")
     public void enviarAvisosCobranca1DiaAntes() {
         log.info("[WhatsApp - Aviso 1 dia antes do vencimento] Inicializando...");

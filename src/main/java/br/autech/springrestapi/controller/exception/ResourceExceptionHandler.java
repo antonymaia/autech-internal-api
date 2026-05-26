@@ -1,9 +1,6 @@
 package br.autech.springrestapi.controller.exception;
 
-import br.autech.springrestapi.service.exception.BadRequestException;
-import br.autech.springrestapi.service.exception.DataIntegretyException;
-import br.autech.springrestapi.service.exception.ObjectNotFoundException;
-import br.autech.springrestapi.service.exception.UnauthorizedException;
+import br.autech.springrestapi.service.exception.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -62,5 +59,17 @@ public class ResourceExceptionHandler {
 			err.addError(x.getField(), x.getDefaultMessage());
 		}
 		return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(err);
+	}
+
+	@ExceptionHandler(InternalServerError.class)
+	public ResponseEntity<StandardError> internalServerError(InternalServerError e, HttpServletRequest request){
+		StandardError err = new StandardError(
+			System.currentTimeMillis(),
+			HttpStatus.INTERNAL_SERVER_ERROR.value(),
+			"Internal Server Error",
+			e.getMessage(),
+			request.getRequestURI()
+		);
+		return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(err);
 	}
 }

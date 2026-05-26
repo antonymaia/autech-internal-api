@@ -2,6 +2,7 @@ package br.autech.springrestapi.service;
 
 import br.autech.springrestapi.model.Cliente;
 import br.autech.springrestapi.repository.ClienteRepository;
+import br.autech.springrestapi.service.exception.BadRequestException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -21,15 +23,19 @@ public class WhatsAppService {
 
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final RestTemplate restTemplate = new RestTemplate();
+    private static final ZoneId BRASIL = ZoneId.of("America/Sao_Paulo");
 
     @Value("${whatsapp.evolution.base-url:}")
     private String baseUrl;
-
-    @Value("${whatsapp.evolution.instance:}")
+    @Value("${whatsapp.evolution.instance.name:}")
     private String instance;
-
     @Value("${whatsapp.evolution.api-key:}")
     private String apiKey;
+    @Value("${pix.chave}")
+    private String chavePix;
+    @Value("${pix.nome}")
+    private String nomePix;
+
 
     private final ClienteRepository clienteRepository;
 
@@ -43,6 +49,21 @@ public class WhatsAppService {
             log.warn("Telefone inválido para teste: '{}'", telefone);
             return;
         }
+        LocalDate amanha = LocalDate.now(BRASIL).plusDays(1);
+
+        String valor = "R$ " + "135.99".replace(".", ",");
+        String vencimento = amanha.format(FORMATTER);
+
+        mensagem = String.format(
+           "Olá, %s! 👋%n%n" +
+              "Passando para lembrar que sua mensalidade *AUTECH* vence *amanhã*, %s.%n" +
+              "Valor: *%s*%n%n" +
+              "Chave Pix CNPJ%n" +
+              "_%s_%n" +
+              "_%s_%n%n" +
+              "Evite a interrupção do serviço realizando o pagamento em dia.%n" +
+              "Dúvidas? Entre em contato conosco. 😊",
+           "Antony Maia", vencimento, valor, chavePix, nomePix);
         enviar(telefoneFormatado, mensagem);
     }
 
@@ -60,12 +81,15 @@ public class WhatsAppService {
         String vencimento = dataVencimento.format(FORMATTER);
 
         String mensagem = String.format(
-                "Olá, %s! 👋%n%n" +
-                "Passamos para lembrar que sua mensalidade *AUTECH* vence *amanhã*, %s.%n" +
-                "💰 Valor: *%s*%n%n" +
-                "Evite a interrupção do serviço realizando o pagamento em dia.%n" +
-                "Dúvidas? Entre em contato conosco. 😊",
-                nome, vencimento, valor);
+           "Olá, %s! 👋%n%n" +
+              "Passando para lembrar que sua mensalidade *AUTECH* vence *amanhã*, %s.%n" +
+              "Valor: *%s*%n%n" +
+              "Chave Pix CNPJ%n" +
+              "_%s_%n" +
+              "_%s_%n%n" +
+              "Evite a interrupção do serviço realizando o pagamento em dia.%n" +
+              "Dúvidas? Entre em contato conosco. 😊",
+           "Antony Maia", vencimento, valor, chavePix, nomePix);
 
         enviar(telefone, mensagem);
     }
@@ -84,12 +108,15 @@ public class WhatsAppService {
         String vencimento = dataVencimento.format(FORMATTER);
 
         String mensagem = String.format(
-                "Olá, %s! 👋%n%n" +
-                "⚠️ Sua mensalidade *AUTECH* vence *hoje*, %s.%n" +
-                "💰 Valor: *%s*%n%n" +
-                "Realize o pagamento hoje para evitar a suspensão do serviço.%n" +
-                "Caso já tenha efetuado o pagamento, desconsidere esta mensagem. 😊",
-                nome, vencimento, valor);
+           "Olá, %s! 👋%n%n" +
+              "Passando para lembrar que sua mensalidade *AUTECH* vence *hoje*, %s.%n" +
+              "Valor: *%s*%n%n" +
+              "Chave Pix CNPJ%n" +
+              "_%s_%n" +
+              "_%s_%n%n" +
+              "Evite a interrupção do serviço realizando o pagamento em dia.%n" +
+              "Dúvidas? Entre em contato conosco. 😊",
+           "Antony Maia", vencimento, valor, chavePix, nomePix);
 
         enviar(telefone, mensagem);
     }
