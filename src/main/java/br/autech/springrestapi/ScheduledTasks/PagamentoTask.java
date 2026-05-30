@@ -38,7 +38,7 @@ public class PagamentoTask {
         log.info("[WhatsApp - Aviso 1 dia antes do vencimento] finalizado com sucesso. {} cliente(s) processado(s).", clientes.size());
     }
 
-    @Scheduled(cron = "0 30 6 * * *")
+    @Scheduled(cron = "0 0 6 * * *")
     public void enviarAvisosCobrancaDiaDoVencimento() {
         log.info("[WhatsApp - Aviso no dia do vencimento] Inicializando...");
         LocalDate hoje = LocalDate.now(BRASIL);

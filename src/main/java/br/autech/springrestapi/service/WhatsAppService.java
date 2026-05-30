@@ -116,7 +116,7 @@ public class WhatsAppService {
               "_%s_%n%n" +
               "Evite a interrupção do serviço realizando o pagamento em dia.%n" +
               "Dúvidas? Entre em contato conosco. 😊",
-           "Antony Maia", vencimento, valor, chavePix, nomePix);
+           nome, vencimento, valor, chavePix, nomePix);
 
         enviar(telefone, mensagem);
     }
@@ -135,11 +135,6 @@ public class WhatsAppService {
         if (telefoneFormatado == null) {
             log.warn("Telefone inválido para cliente {}: '{}'", cliente.getCnpjCpf(), telefone);
             return null;
-        }
-        if (!telefoneFormatado.equals(telefone)) {
-            cliente.setTelefone(telefoneFormatado);
-            clienteRepository.save(cliente);
-            log.info("Telefone do cliente {} atualizado: '{}' -> '{}'", cliente.getCnpjCpf(), telefone, telefoneFormatado);
         }
         return telefoneFormatado;
     }
