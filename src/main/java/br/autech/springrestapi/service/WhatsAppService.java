@@ -5,6 +5,8 @@ import br.autech.springrestapi.repository.ClienteRepository;
 import br.autech.springrestapi.service.exception.BadRequestException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
@@ -20,6 +22,8 @@ import java.util.Map;
 @Service
 @RequiredArgsConstructor
 public class WhatsAppService {
+
+    private static final Logger LOG_COBRANCA = LoggerFactory.getLogger("cobranca-whatsapp");
 
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final RestTemplate restTemplate = new RestTemplate();
@@ -64,16 +68,19 @@ public class WhatsAppService {
               "Evite a interrupção do serviço realizando o pagamento em dia.%n" +
               "Dúvidas? Entre em contato conosco. 😊",
            "Antony Maia", vencimento, valor, chavePix, nomePix);
-        enviar(telefoneFormatado, mensagem);
+        enviar(telefoneFormatado, mensagem, log);
     }
 
     // Enviado 1 dia antes do vencimento
     public void enviarAvisoCobranca(Cliente cliente, LocalDate dataVencimento) {
+        String contexto = "1 dia antes";
         if (cliente.getValorMensalidade() == null) {
-            log.warn("Cliente {} sem valorMensalidade. WhatsApp não enviado.", cliente.getCnpjCpf());
+            LOG_COBRANCA.warn("[{}] Cliente {} ({}) sem valorMensalidade. Mensagem nao enviada. Vencimento: {}, Telefone: {}",
+                    contexto, cliente.getCnpjCpf(), nomeParaLog(cliente),
+                    dataVencimento.format(FORMATTER), valorOuNd(cliente.getTelefone()));
             return;
         }
-        String telefone = prepararTelefoneCliente(cliente);
+        String telefone = prepararTelefoneCliente(cliente, contexto, dataVencimento);
         if (telefone == null) return;
 
         String nome = resolverNome(cliente);
@@ -89,18 +96,21 @@ public class WhatsAppService {
               "_%s_%n%n" +
               "Evite a interrupção do serviço realizando o pagamento em dia.%n" +
               "Dúvidas? Entre em contato conosco. 😊",
-           "Antony Maia", vencimento, valor, chavePix, nomePix);
+           nome, vencimento, valor, chavePix, nomePix);
 
-        enviar(telefone, mensagem);
+        enviarCobranca(cliente, telefone, mensagem, contexto, dataVencimento);
     }
 
     // Enviado no dia do vencimento
     public void enviarAvisoCobrancaDia(Cliente cliente, LocalDate dataVencimento) {
+        String contexto = "dia do vencimento";
         if (cliente.getValorMensalidade() == null) {
-            log.warn("Cliente {} sem valorMensalidade. WhatsApp não enviado.", cliente.getCnpjCpf());
+            LOG_COBRANCA.warn("[{}] Cliente {} ({}) sem valorMensalidade. Mensagem nao enviada. Vencimento: {}, Telefone: {}",
+                    contexto, cliente.getCnpjCpf(), nomeParaLog(cliente),
+                    dataVencimento.format(FORMATTER), valorOuNd(cliente.getTelefone()));
             return;
         }
-        String telefone = prepararTelefoneCliente(cliente);
+        String telefone = prepararTelefoneCliente(cliente, contexto, dataVencimento);
         if (telefone == null) return;
 
         String nome = resolverNome(cliente);
@@ -118,28 +128,62 @@ public class WhatsAppService {
               "Dúvidas? Entre em contato conosco. 😊",
            nome, vencimento, valor, chavePix, nomePix);
 
-        enviar(telefone, mensagem);
+        enviarCobranca(cliente, telefone, mensagem, contexto, dataVencimento);
     }
 
-    private String prepararTelefoneCliente(Cliente cliente) {
+    private String prepararTelefoneCliente(Cliente cliente, String contexto, LocalDate dataVencimento) {
+        String venc = dataVencimento.format(FORMATTER);
+        String valor = cliente.getValorMensalidade() != null
+                ? cliente.getValorMensalidade().toPlainString()
+                : "n/d";
+
         if (!isConfigurado()) {
-            log.warn("WhatsApp Evolution API não configurada. Mensagem não enviada.");
+            LOG_COBRANCA.warn("[{}] WhatsApp Evolution API nao configurada. Cliente {} ({}) nao notificado. Vencimento: {}, Valor: {}",
+                    contexto, cliente.getCnpjCpf(), nomeParaLog(cliente), venc, valor);
             return null;
         }
         String telefone = cliente.getTelefone();
         if (telefone == null || telefone.isBlank()) {
-            log.warn("Cliente {} sem telefone cadastrado.", cliente.getCnpjCpf());
+            LOG_COBRANCA.warn("[{}] Cliente {} ({}) sem telefone cadastrado. Vencimento: {}, Valor: {}",
+                    contexto, cliente.getCnpjCpf(), nomeParaLog(cliente), venc, valor);
             return null;
         }
         String telefoneFormatado = normalizarTelefone(telefone);
         if (telefoneFormatado == null) {
-            log.warn("Telefone inválido para cliente {}: '{}'", cliente.getCnpjCpf(), telefone);
+            LOG_COBRANCA.warn("[{}] Telefone invalido para cliente {} ({}): '{}'. Vencimento: {}, Valor: {}",
+                    contexto, cliente.getCnpjCpf(), nomeParaLog(cliente), telefone, venc, valor);
             return null;
         }
         return telefoneFormatado;
     }
 
-    private void enviar(String telefone, String mensagem) {
+    private void enviarCobranca(Cliente cliente, String telefone, String mensagem,
+                                 String contexto, LocalDate dataVencimento) {
+        try {
+            ResponseEntity<String> response = doSend(telefone, mensagem);
+            log.info("WhatsApp [{}] enviado para {} ({}) tel {} - status {}",
+                    contexto, cliente.getCnpjCpf(), nomeParaLog(cliente),
+                    telefone, response.getStatusCode());
+        } catch (Exception e) {
+            String valor = cliente.getValorMensalidade() != null
+                    ? cliente.getValorMensalidade().toPlainString()
+                    : "n/d";
+            LOG_COBRANCA.error("[{}] Falha ao enviar WhatsApp. Cliente: {} ({}), Telefone: {}, Vencimento: {}, Valor: {}, Erro: {}",
+                    contexto, cliente.getCnpjCpf(), nomeParaLog(cliente), telefone,
+                    dataVencimento.format(FORMATTER), valor, e.getMessage());
+        }
+    }
+
+    private void enviar(String telefone, String mensagem, Logger errorLogger) {
+        try {
+            ResponseEntity<String> response = doSend(telefone, mensagem);
+            log.info("WhatsApp enviado para {} - status {}", telefone, response.getStatusCode());
+        } catch (Exception e) {
+            errorLogger.error("Erro ao enviar WhatsApp para {}: {}", telefone, e.getMessage());
+        }
+    }
+
+    private ResponseEntity<String> doSend(String telefone, String mensagem) {
         String url = baseUrl + "/message/sendText/" + instance;
 
         HttpHeaders headers = new HttpHeaders();
@@ -150,13 +194,7 @@ public class WhatsAppService {
         payload.put("number", telefone);
         payload.put("text", mensagem);
 
-        try {
-            ResponseEntity<String> response = restTemplate.postForEntity(
-                    url, new HttpEntity<>(payload, headers), String.class);
-            log.info("WhatsApp enviado para {} - status {}", telefone, response.getStatusCode());
-        } catch (Exception e) {
-            log.error("Erro ao enviar WhatsApp para {}: {}", telefone, e.getMessage());
-        }
+        return restTemplate.postForEntity(url, new HttpEntity<>(payload, headers), String.class);
     }
 
     private String resolverNome(Cliente cliente) {
@@ -164,6 +202,16 @@ public class WhatsAppService {
         return (nomeResponsavel != null && !nomeResponsavel.isBlank())
                 ? nomeResponsavel
                 : cliente.getNome();
+    }
+
+    private String nomeParaLog(Cliente cliente) {
+        String nomeResp = cliente.getNomeResponsavel();
+        if (nomeResp != null && !nomeResp.isBlank()) return nomeResp;
+        return cliente.getNome() != null ? cliente.getNome() : "sem nome";
+    }
+
+    private String valorOuNd(String valor) {
+        return (valor == null || valor.isBlank()) ? "n/d" : valor;
     }
 
     private boolean isConfigurado() {

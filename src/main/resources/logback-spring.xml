@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+    <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+
+    <springProperty name="LOG_COBRANCA_DIR" source="log.cobranca.dir" defaultValue="log"/>
+
+    <appender name="COBRANCA_WHATSAPP_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_COBRANCA_DIR}/log-cobranca-whatsapp.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_COBRANCA_DIR}/log-cobranca-whatsapp-%d{yyyy-MM-dd}.log</fileNamePattern>
+            <maxHistory>90</maxHistory>
+            <totalSizeCap>500MB</totalSizeCap>
+        </rollingPolicy>
+        <encoder>
+            <charset>UTF-8</charset>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <logger name="cobranca-whatsapp" level="WARN" additivity="true">
+        <appender-ref ref="COBRANCA_WHATSAPP_FILE"/>
+    </logger>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>
