@@ -67,7 +67,7 @@ public class WhatsAppService {
               "_%s_%n%n" +
               "Evite a interrupção do serviço realizando o pagamento em dia.%n" +
               "Dúvidas? Entre em contato conosco. 😊",
-           "Antony Maia", vencimento, valor, chavePix, nomePix);
+           "", vencimento, valor, chavePix, nomePix);
         enviar(telefoneFormatado, mensagem, log);
     }
 
@@ -198,10 +198,10 @@ public class WhatsAppService {
     }
 
     private String resolverNome(Cliente cliente) {
-        String nomeResponsavel = cliente.getNomeResponsavel();
-        return (nomeResponsavel != null && !nomeResponsavel.isBlank())
-                ? nomeResponsavel
-                : cliente.getNome();
+        if (cliente.getNomeResponsavel() != null && cliente.getNomeResponsavel().isBlank()){
+            return cliente.getNomeResponsavel();
+        }
+        return cliente.getNome();
     }
 
     private String nomeParaLog(Cliente cliente) {
