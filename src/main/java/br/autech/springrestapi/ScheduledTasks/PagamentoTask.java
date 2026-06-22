@@ -1,5 +1,6 @@
 package br.autech.springrestapi.ScheduledTasks;
 
+import br.autech.springrestapi.dtos.ClienteDTO;
 import br.autech.springrestapi.model.Cliente;
 import br.autech.springrestapi.service.ClienteService;
 import br.autech.springrestapi.service.FaturaService;
@@ -33,7 +34,7 @@ public class PagamentoTask {
     public void enviarAvisosCobranca1DiaAntes() {
         log.info("[WhatsApp - Aviso 1 dia antes do vencimento] Inicializando...");
         LocalDate amanha = LocalDate.now(BRASIL).plusDays(1);
-        List<Cliente> clientes = clienteService.buscarClientesPorDiaVencimento(amanha.getDayOfMonth(), "S");
+        List<ClienteDTO> clientes = clienteService.buscarClientesPorDiaVencimento(amanha.getDayOfMonth(), "S");
         clientes.forEach(cliente -> whatsAppService.enviarAvisoCobranca(cliente, amanha));
         log.info("[WhatsApp - Aviso 1 dia antes do vencimento] finalizado com sucesso. {} cliente(s) processado(s).", clientes.size());
     }
@@ -42,7 +43,7 @@ public class PagamentoTask {
     public void enviarAvisosCobrancaDiaDoVencimento() {
         log.info("[WhatsApp - Aviso no dia do vencimento] Inicializando...");
         LocalDate hoje = LocalDate.now(BRASIL);
-        List<Cliente> clientes = clienteService.buscarClientesPorDiaVencimento(hoje.getDayOfMonth(), "S");
+        List<ClienteDTO> clientes = clienteService.buscarClientesPorDiaVencimento(hoje.getDayOfMonth(), "S");
         clientes.forEach(cliente -> whatsAppService.enviarAvisoCobrancaDia(cliente, hoje));
         log.info("[WhatsApp - Aviso no dia do vencimento] finalizado com sucesso. {} cliente(s) processado(s).", clientes.size());
     }

@@ -1,5 +1,6 @@
 package br.autech.springrestapi.service;
 
+import br.autech.springrestapi.dtos.ClienteDTO;
 import br.autech.springrestapi.model.Cidade;
 import br.autech.springrestapi.model.Cliente;
 import br.autech.springrestapi.model.Endereco;
@@ -99,16 +100,16 @@ public class ClienteService {
         clienteRepository.deleteById(cnpjCpf);
     }
 
-    public Page<Cliente> search(int searchId, String searchTerm, int page, int size) {
+    public Page<ClienteDTO> search(int searchId, String searchTerm, int page, int size) {
 
 
         searchTerm = "%" + searchTerm + "%";
 
         if (searchId == 1) {
-            Pageable pageable = PageRequest.of(page, size, Sort.by("CNPJ_CPF"));
-            return clienteRepository.searchByCnpjCpf(searchTerm, pageable);
+            Pageable pageable = PageRequest.of(page, size);
+            return clienteRepository.buscarClienteDtoPorCnpjCpfComecando(searchTerm, pageable);
         }
-        if (searchId == 2) {
+        /*if (searchId == 2) {
             Pageable pageable = PageRequest.of(page, size, Sort.by("nome"));
             return clienteRepository.searchByNome(searchTerm.toUpperCase(), pageable);
         }
@@ -119,7 +120,7 @@ public class ClienteService {
         if (searchId == 4) {
             Pageable pageable = PageRequest.of(page, size);
             return clienteRepository.findAllByCidade(searchTerm, pageable);
-        }
+        }*/
 
         return null;
     }
@@ -260,16 +261,16 @@ public class ClienteService {
         return clienteRepository.countByBloqueadoAndAtivo(bloqueado, "S");
     }
 
-    public List<Cliente> buscarClientesPorDiaVencimento(int diaVencimento, String ativo) {
+    public List<ClienteDTO> buscarClientesPorDiaVencimento(int diaVencimento, String ativo) {
         String dia = diaVencimento < 10 ? "0" + diaVencimento : String.valueOf(diaVencimento);
-        return clienteRepository.findAllByDiaVencimentoAndAtivo(dia, ativo);
+        return clienteRepository.buscarResumoClientePorDiaVencimento(dia);
     }
 
-    public List<Cliente> buscarClientesPorDiaVencimentoa5dias() {
+    public List<ClienteDTO> buscarClientesPorDiaVencimentoa5dias() {
         LocalDate diatAtual = LocalDate.now();
         String diaVencimento = (diatAtual.getDayOfMonth() + 5 ) < 10 ? "0" + (diatAtual.getDayOfMonth() + 5 ) : Integer.toString(diatAtual.getDayOfMonth() + 5 );
 
-        return clienteRepository.findAllByDiaVencimentoAndAtivo(diaVencimento, "S");
+        return clienteRepository.buscarResumoClientePorDiaVencimento(diaVencimento);
     }
 
 }

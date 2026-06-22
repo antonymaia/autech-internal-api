@@ -1,5 +1,6 @@
 package br.autech.springrestapi.controller;
 
+import br.autech.springrestapi.dtos.ClienteDTO;
 import br.autech.springrestapi.dtos.ClienteNovoDTO;
 import br.autech.springrestapi.model.Cliente;
 import br.autech.springrestapi.service.ClienteService;
@@ -35,14 +36,13 @@ public class ClienteController {
     }
 
     @RequestMapping(value = "/search", method = RequestMethod.GET)
-    public ResponseEntity<Page<Cliente>> search(
+    public ResponseEntity<Page<ClienteDTO>> search(
             @RequestParam(value = "searchId", required = false, defaultValue = "1") int searchId,
             @RequestParam(value = "searchTerm", required = false, defaultValue = "")  String searchTerm,
             @RequestParam(value = "page", required = false, defaultValue = "0") int page,
             @RequestParam(value = "size", required = false, defaultValue = "20") int size
     ){
-        Page<Cliente> pagenation = clienteService.search(searchId, searchTerm, page, size);
-        return ResponseEntity.ok().body(pagenation);
+        return ResponseEntity.ok().body(clienteService.search(searchId, searchTerm, page, size));
     }
 
     @RequestMapping(method = RequestMethod.POST)

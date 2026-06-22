@@ -1,8 +1,7 @@
 package br.autech.springrestapi.service;
 
-import br.autech.springrestapi.model.Cliente;
+import br.autech.springrestapi.dtos.ClienteDTO;
 import br.autech.springrestapi.repository.ClienteRepository;
-import br.autech.springrestapi.service.exception.BadRequestException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
@@ -72,9 +71,9 @@ public class WhatsAppService {
     }
 
     // Enviado 1 dia antes do vencimento
-    public void enviarAvisoCobranca(Cliente cliente, LocalDate dataVencimento) {
+    public void enviarAvisoCobranca(ClienteDTO cliente, LocalDate dataVencimento) {
         String contexto = "1 dia antes";
-        if (cliente.getValorMensalidade() == null) {
+        if (cliente.getMensalidade() == null) {
             LOG_COBRANCA.warn("[{}] Cliente {} ({}) sem valorMensalidade. Mensagem nao enviada. Vencimento: {}, Telefone: {}",
                     contexto, cliente.getCnpjCpf(), nomeParaLog(cliente),
                     dataVencimento.format(FORMATTER), valorOuNd(cliente.getTelefone()));
@@ -84,7 +83,7 @@ public class WhatsAppService {
         if (telefone == null) return;
 
         String nome = resolverNome(cliente);
-        String valor = "R$ " + cliente.getValorMensalidade().toPlainString().replace(".", ",");
+        String valor = "R$ " + cliente.getMensalidade().toPlainString().replace(".", ",");
         String vencimento = dataVencimento.format(FORMATTER);
 
         String mensagem = String.format(
@@ -102,9 +101,9 @@ public class WhatsAppService {
     }
 
     // Enviado no dia do vencimento
-    public void enviarAvisoCobrancaDia(Cliente cliente, LocalDate dataVencimento) {
+    public void enviarAvisoCobrancaDia(ClienteDTO cliente, LocalDate dataVencimento) {
         String contexto = "dia do vencimento";
-        if (cliente.getValorMensalidade() == null) {
+        if (cliente.getMensalidade() == null) {
             LOG_COBRANCA.warn("[{}] Cliente {} ({}) sem valorMensalidade. Mensagem nao enviada. Vencimento: {}, Telefone: {}",
                     contexto, cliente.getCnpjCpf(), nomeParaLog(cliente),
                     dataVencimento.format(FORMATTER), valorOuNd(cliente.getTelefone()));
@@ -114,7 +113,7 @@ public class WhatsAppService {
         if (telefone == null) return;
 
         String nome = resolverNome(cliente);
-        String valor = "R$ " + cliente.getValorMensalidade().toPlainString().replace(".", ",");
+        String valor = "R$ " + cliente.getMensalidade().toPlainString().replace(".", ",");
         String vencimento = dataVencimento.format(FORMATTER);
 
         String mensagem = String.format(
@@ -131,10 +130,10 @@ public class WhatsAppService {
         enviarCobranca(cliente, telefone, mensagem, contexto, dataVencimento);
     }
 
-    private String prepararTelefoneCliente(Cliente cliente, String contexto, LocalDate dataVencimento) {
+    private String prepararTelefoneCliente(ClienteDTO cliente, String contexto, LocalDate dataVencimento) {
         String venc = dataVencimento.format(FORMATTER);
-        String valor = cliente.getValorMensalidade() != null
-                ? cliente.getValorMensalidade().toPlainString()
+        String valor = cliente.getMensalidade() != null
+                ? cliente.getMensalidade().toPlainString()
                 : "n/d";
 
         if (!isConfigurado()) {
@@ -157,7 +156,7 @@ public class WhatsAppService {
         return telefoneFormatado;
     }
 
-    private void enviarCobranca(Cliente cliente, String telefone, String mensagem,
+    private void enviarCobranca(ClienteDTO cliente, String telefone, String mensagem,
                                  String contexto, LocalDate dataVencimento) {
         try {
             ResponseEntity<String> response = doSend(telefone, mensagem);
@@ -165,8 +164,8 @@ public class WhatsAppService {
                     contexto, cliente.getCnpjCpf(), nomeParaLog(cliente),
                     telefone, response.getStatusCode());
         } catch (Exception e) {
-            String valor = cliente.getValorMensalidade() != null
-                    ? cliente.getValorMensalidade().toPlainString()
+            String valor = cliente.getMensalidade() != null
+                    ? cliente.getMensalidade().toPlainString()
                     : "n/d";
             LOG_COBRANCA.error("[{}] Falha ao enviar WhatsApp. Cliente: {} ({}), Telefone: {}, Vencimento: {}, Valor: {}, Erro: {}",
                     contexto, cliente.getCnpjCpf(), nomeParaLog(cliente), telefone,
@@ -197,17 +196,17 @@ public class WhatsAppService {
         return restTemplate.postForEntity(url, new HttpEntity<>(payload, headers), String.class);
     }
 
-    private String resolverNome(Cliente cliente) {
+    private String resolverNome(ClienteDTO cliente) {
         if (cliente.getNomeResponsavel() != null && cliente.getNomeResponsavel().isBlank()){
             return cliente.getNomeResponsavel();
         }
-        return cliente.getNome();
+        return cliente.getRazaoSocial();
     }
 
-    private String nomeParaLog(Cliente cliente) {
+    private String nomeParaLog(ClienteDTO cliente) {
         String nomeResp = cliente.getNomeResponsavel();
         if (nomeResp != null && !nomeResp.isBlank()) return nomeResp;
-        return cliente.getNome() != null ? cliente.getNome() : "sem nome";
+        return cliente.getRazaoSocial() != null ? cliente.getRazaoSocial() : "sem nome";
     }
 
     private String valorOuNd(String valor) {
@@ -220,11 +219,6 @@ public class WhatsAppService {
                 && apiKey != null && !apiKey.isBlank();
     }
 
-    /**
-     * Normaliza o telefone para o formato E.164 brasileiro (Pernambuco, celular).
-     * Resultado: 55 + 81 + 9 + 8 dígitos = 13 dígitos.
-     * Retorna null se houver menos de 8 dígitos numéricos.
-     */
     private String normalizarTelefone(String telefone) {
         if (telefone == null || telefone.isBlank()) return null;
 

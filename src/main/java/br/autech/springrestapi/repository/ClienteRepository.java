@@ -1,5 +1,6 @@
 package br.autech.springrestapi.repository;
 
+import br.autech.springrestapi.dtos.ClienteDTO;
 import br.autech.springrestapi.model.Cliente;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -51,5 +52,41 @@ public interface ClienteRepository extends JpaRepository<Cliente, String> {
 
     long countByBloqueadoAndAtivo(String bloqueado, String ativo);
 
-    List<Cliente> findAllByDiaVencimentoAndAtivo(String diaVencimento, String Ativo);
+    @Query(value = "" +
+       " SELECT new br.autech.springrestapi.dtos.ClienteDTO(" +
+       " c.cnpjCpf, " +
+       " c.razaoSocialNome," +
+       " c.nome," +
+       " c.nomeResponsavel, " +
+       " e.bairro," +
+       " e.cidade.nome," +
+       " e.cidade.estado.uf," +
+       " c.telefone, " +
+       " c.bloqueado," +
+       " c.ativo," +
+       " c.valorMensalidade," +
+       " c.diaVencimento" +
+       ") FROM Cliente c " +
+       " LEFT JOIN c.endereco e " +
+       " WHERE c.ativo LIKE 'S' ")
+    List<ClienteDTO> buscarResumoClientePorDiaVencimento(String diaVencimento);
+
+    @Query(value = "" +
+       " SELECT new br.autech.springrestapi.dtos.ClienteDTO(" +
+       " c.cnpjCpf, " +
+       " c.razaoSocialNome," +
+       " c.nome," +
+       " c.nomeResponsavel, " +
+       " e.bairro," +
+       " e.cidade.nome," +
+       " e.cidade.estado.uf," +
+       " c.telefone, " +
+       " c.bloqueado," +
+       " c.ativo," +
+       " c.valorMensalidade," +
+       " c.diaVencimento" +
+       ") FROM Cliente c " +
+       " LEFT JOIN c.endereco e " +
+       " WHERE c.cnpjCpf LIKE CONCAT( :termoBusca , '%' ) ")
+    Page<ClienteDTO> buscarClienteDtoPorCnpjCpfComecando(@Param("termoBusca") String termoBusca, Pageable pageable);
 }
