@@ -1,5 +1,6 @@
 package br.autech.springrestapi.service;
 
+import br.autech.springrestapi.dtos.ClienteDTO;
 import br.autech.springrestapi.model.*;
 import br.autech.springrestapi.model.enums.EstadoFatura;
 import br.autech.springrestapi.repository.FaturaRepository;
@@ -54,16 +55,16 @@ public class FaturaService {
         });
     }
     public void gerarFaturas5dias(){
-        List<Cliente> listaCliente = clienteService.buscarClientesPorDiaVencimentoa5dias();
+        List<ClienteDTO> listaCliente = clienteService.buscarClientesPorDiaVencimentoa5dias();
 
         ZoneId brasilZone = ZoneId.of("America/Sao_Paulo");
         LocalDate dataVencimento = LocalDate.now(brasilZone).plusDays(5);
 
-        listaCliente.forEach( cliente -> {
+       /* listaCliente.forEach( cliente -> {
             Fatura fatura = new Fatura(
                null,
                EstadoFatura.ABERTA,
-               cliente.getValorMensalidade(),
+               cliente.getMensalidade(),
                dataVencimento,
                null,
                LocalDateTime.now(),
@@ -76,7 +77,7 @@ public class FaturaService {
             if(!cliente.getEmail().isBlank()){
                 enviarEmailAvisoFaturaHTML(fatura);
             }
-        });
+        });*/
     }
 
 
