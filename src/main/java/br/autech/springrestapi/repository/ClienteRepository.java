@@ -68,7 +68,7 @@ public interface ClienteRepository extends JpaRepository<Cliente, String> {
        " c.diaVencimento" +
        ") FROM Cliente c " +
        " LEFT JOIN c.endereco e " +
-       " WHERE c.ativo LIKE 'S' ")
+       " WHERE c.ativo LIKE 'S' AND c.diaVencimento LIKE :diaVencimento ")
     List<ClienteDTO> buscarResumoClientePorDiaVencimento(String diaVencimento);
 
     @Query(value = "" +

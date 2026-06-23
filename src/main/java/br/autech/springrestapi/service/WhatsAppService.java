@@ -40,8 +40,6 @@ public class WhatsAppService {
     private String nomePix;
 
 
-    private final ClienteRepository clienteRepository;
-
     public void enviarMensagemTeste(String telefone, String mensagem) {
         if (!isConfigurado()) {
             log.warn("WhatsApp Evolution API não configurada. Mensagem de teste não enviada.");
