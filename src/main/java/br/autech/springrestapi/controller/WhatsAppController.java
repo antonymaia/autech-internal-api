@@ -15,8 +15,14 @@ public class WhatsAppController {
     }
 
     @PostMapping("/teste")
-    public ResponseEntity<String> teste(@RequestParam String telefone, @RequestParam String mensagem) {
-        whatsAppService.enviarMensagemTeste(telefone, mensagem);
+    public ResponseEntity<String> teste(@RequestParam String telefone) {
+        whatsAppService.enviarMensagemTeste(telefone);
         return ResponseEntity.ok("Mensagem enviada para " + telefone);
+    }
+
+    @GetMapping("/enviar_mensagem_cobranca/{cnpjCpf}")
+    public ResponseEntity<Void> enviarMensagemCobranca(@PathVariable("cnpjCpf") String cnpjCpf){
+        whatsAppService.enviarMensagemCobranca(cnpjCpf);
+        return ResponseEntity.ok().build();
     }
 }

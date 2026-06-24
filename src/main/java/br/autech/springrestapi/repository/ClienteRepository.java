@@ -1,6 +1,7 @@
 package br.autech.springrestapi.repository;
 
 import br.autech.springrestapi.dtos.ClienteDTO;
+import br.autech.springrestapi.dtos.ClienteDadosCobrancaDto;
 import br.autech.springrestapi.model.Cliente;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -87,6 +88,75 @@ public interface ClienteRepository extends JpaRepository<Cliente, String> {
        " c.diaVencimento" +
        ") FROM Cliente c " +
        " LEFT JOIN c.endereco e " +
-       " WHERE c.cnpjCpf LIKE CONCAT( :termoBusca , '%' ) ")
+       " WHERE c.cnpjCpf LIKE :termoBusca ")
     Page<ClienteDTO> buscarClienteDtoPorCnpjCpfComecando(@Param("termoBusca") String termoBusca, Pageable pageable);
+
+    @Query(value = "" +
+       " SELECT new br.autech.springrestapi.dtos.ClienteDTO(" +
+       " c.cnpjCpf, " +
+       " c.razaoSocialNome," +
+       " c.nome," +
+       " c.nomeResponsavel, " +
+       " e.bairro," +
+       " e.cidade.nome," +
+       " e.cidade.estado.uf," +
+       " c.telefone, " +
+       " c.bloqueado," +
+       " c.ativo," +
+       " c.valorMensalidade," +
+       " c.diaVencimento" +
+       ") FROM Cliente c " +
+       " LEFT JOIN c.endereco e " +
+       " WHERE c.nome LIKE :termoBusca ")
+    Page<ClienteDTO> buscarClienteDtoPorNomeComecando(String termoBusca, Pageable pageable);
+
+    @Query(value = "" +
+       " SELECT new br.autech.springrestapi.dtos.ClienteDTO(" +
+       " c.cnpjCpf, " +
+       " c.razaoSocialNome," +
+       " c.nome," +
+       " c.nomeResponsavel, " +
+       " e.bairro," +
+       " e.cidade.nome," +
+       " e.cidade.estado.uf," +
+       " c.telefone, " +
+       " c.bloqueado," +
+       " c.ativo," +
+       " c.valorMensalidade," +
+       " c.diaVencimento" +
+       ") FROM Cliente c " +
+       " LEFT JOIN c.endereco e " +
+       " WHERE e.bairro LIKE :termoBusca ")
+    Page<ClienteDTO> buscarClienteDtoPorBairro(String termoBusca, Pageable pageable);
+
+    @Query(value = "" +
+       " SELECT new br.autech.springrestapi.dtos.ClienteDTO(" +
+       " c.cnpjCpf, " +
+       " c.razaoSocialNome," +
+       " c.nome," +
+       " c.nomeResponsavel, " +
+       " e.bairro," +
+       " e.cidade.nome," +
+       " e.cidade.estado.uf," +
+       " c.telefone, " +
+       " c.bloqueado," +
+       " c.ativo," +
+       " c.valorMensalidade," +
+       " c.diaVencimento" +
+       ") FROM Cliente c " +
+       " LEFT JOIN c.endereco e " +
+       " WHERE e.cidade.nome LIKE :termoBusca ")
+    Page<ClienteDTO> buscarClienteDtoPorCidade(String termoBusca, Pageable pageable);
+
+    @Query(value = "" +
+       " SELECT new br.autech.springrestapi.dtos.ClienteDadosCobrancaDto(" +
+       " c.cnpjCpf, " +
+       " c.nomeResponsavel, " +
+       " c.razaoSocialNome," +
+       " c.valorMensalidade," +
+       " c.diaVencimento, " +
+       " c.telefone " +
+       ") FROM Cliente c " +
+       " WHERE c.cnpjCpf = :cnpjCpf ")
+    ClienteDadosCobrancaDto buscarDadosCobranca(String cnpjCpf);
 }

@@ -103,24 +103,28 @@ public class ClienteService {
     public Page<ClienteDTO> search(int searchId, String searchTerm, int page, int size) {
 
 
-        searchTerm = "%" + searchTerm + "%";
+
 
         if (searchId == 1) {
             Pageable pageable = PageRequest.of(page, size);
+            searchTerm = searchTerm + "%";
             return clienteRepository.buscarClienteDtoPorCnpjCpfComecando(searchTerm, pageable);
         }
-        /*if (searchId == 2) {
-            Pageable pageable = PageRequest.of(page, size, Sort.by("nome"));
-            return clienteRepository.searchByNome(searchTerm.toUpperCase(), pageable);
+        if (searchId == 2) {
+            Pageable pageable = PageRequest.of(page, size);
+            searchTerm = '%' + searchTerm + "%";
+            return clienteRepository.buscarClienteDtoPorNomeComecando(searchTerm.toUpperCase(), pageable);
         }
         if (searchId == 3) {
             Pageable pageable = PageRequest.of(page, size);
-            return clienteRepository.findAllByBairro(searchTerm, pageable);
+            searchTerm = '%' + searchTerm + "%";
+            return clienteRepository.buscarClienteDtoPorBairro(searchTerm, pageable);
         }
         if (searchId == 4) {
             Pageable pageable = PageRequest.of(page, size);
-            return clienteRepository.findAllByCidade(searchTerm, pageable);
-        }*/
+            searchTerm = '%' + searchTerm + "%";
+            return clienteRepository.buscarClienteDtoPorCidade(searchTerm, pageable);
+        }
 
         return null;
     }
