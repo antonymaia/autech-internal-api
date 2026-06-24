@@ -101,14 +101,11 @@ public class ClienteService {
     }
 
     public Page<ClienteDTO> search(int searchId, String searchTerm, int page, int size) {
-
-
-
-
         if (searchId == 1) {
             Pageable pageable = PageRequest.of(page, size);
             searchTerm = searchTerm + "%";
-            return clienteRepository.buscarClienteDtoPorCnpjCpfComecando(searchTerm, pageable);
+            Page<ClienteDTO> clienteDTOS = clienteRepository.buscarClienteDtoPorCnpjCpfComecando(searchTerm, pageable);
+            return clienteDTOS;
         }
         if (searchId == 2) {
             Pageable pageable = PageRequest.of(page, size);
