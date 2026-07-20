@@ -262,7 +262,7 @@ public class ClienteService {
         return clienteRepository.countByBloqueadoAndAtivo(bloqueado, "S");
     }
 
-    public List<ClienteDTO> buscarClientesPorDiaVencimento(int diaVencimento, String ativo) {
+    public List<ClienteDTO> buscarClientesPorDiaVencimento(int diaVencimento) {
         String dia = diaVencimento < 10 ? "0" + diaVencimento : String.valueOf(diaVencimento);
         return clienteRepository.buscarResumoClientePorDiaVencimento(dia);
     }

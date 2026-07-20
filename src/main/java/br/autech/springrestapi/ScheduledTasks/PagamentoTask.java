@@ -32,14 +32,13 @@ public class PagamentoTask {
       log.info("[WhatsApp - Aviso 1 dia antes do vencimento] Inicializando...");
 
       LocalDate amanha = LocalDate.now(BRASIL).plusDays(1);
-      List<ClienteDTO> clientes = clienteService.buscarClientesPorDiaVencimento(amanha.getDayOfMonth(), "S");
+      List<ClienteDTO> clientes = clienteService.buscarClientesPorDiaVencimento(amanha.getDayOfMonth());
 
       for (ClienteDTO cliente : clientes) {
          try {
             whatsAppService.enviarAvisoCobranca(cliente, amanha);
 
-            // Aguarda 6 segundos antes do próximo envio
-            Thread.sleep(6000);
+            Thread.sleep(10000);
 
          } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -57,11 +56,11 @@ public class PagamentoTask {
    public void enviarAvisosCobrancaDiaDoVencimento() {
       log.info("[WhatsApp - Aviso no dia do vencimento] Inicializando...");
       LocalDate hoje = LocalDate.now(BRASIL);
-      List<ClienteDTO> clientes = clienteService.buscarClientesPorDiaVencimento(hoje.getDayOfMonth(), "S");
+      List<ClienteDTO> clientes = clienteService.buscarClientesPorDiaVencimento(hoje.getDayOfMonth());
       for (ClienteDTO cliente : clientes) {
          try {
             whatsAppService.enviarAvisoCobrancaDia(cliente, hoje);
-            Thread.sleep(6000);
+            Thread.sleep(10000);
          } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             log.error("Processo interrompido.", e);
