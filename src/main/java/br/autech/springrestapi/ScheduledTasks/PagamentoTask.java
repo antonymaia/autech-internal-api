@@ -2,6 +2,7 @@ package br.autech.springrestapi.ScheduledTasks;
 
 import br.autech.springrestapi.dtos.ClienteDTO;
 import br.autech.springrestapi.service.ClienteService;
+import br.autech.springrestapi.service.FaturaService;
 import br.autech.springrestapi.service.FileService;
 import br.autech.springrestapi.service.NcmService;
 import br.autech.springrestapi.service.WhatsAppService;
@@ -24,8 +25,40 @@ public class PagamentoTask {
    private final NcmService ncmService;
    private final FileService fileService;
    private final WhatsAppService whatsAppService;
+   private final FaturaService faturaService;
 
    private static final ZoneId BRASIL = ZoneId.of("America/Sao_Paulo");
+
+   @Scheduled(cron = "0 0 5 * * *")
+   public void gerarFaturasProximoCiclo() {
+      log.info("[Fatura - Gerar proximo ciclo] Inicializando...");
+      try {
+         faturaService.gerarFaturasProximoCiclo();
+      } catch (Exception e) {
+         log.error("[Fatura - Gerar proximo ciclo] Erro: {}", e.getMessage(), e);
+      }
+   }
+
+   @Scheduled(cron = "0 10 5 * * *")
+   public void marcarFaturasVencidas() {
+      log.info("[Fatura - Marcar vencidas] Inicializando...");
+      try {
+         faturaService.atualizarEstadoFatura();
+         log.info("[Fatura - Marcar vencidas] Concluido.");
+      } catch (Exception e) {
+         log.error("[Fatura - Marcar vencidas] Erro: {}", e.getMessage(), e);
+      }
+   }
+
+   @Scheduled(cron = "0 20 5 * * *")
+   public void bloquearInadimplentesDseteMais() {
+      log.info("[Fatura - Bloqueio D+7] Inicializando...");
+      try {
+         faturaService.bloquearInadimplentes();
+      } catch (Exception e) {
+         log.error("[Fatura - Bloqueio D+7] Erro: {}", e.getMessage(), e);
+      }
+   }
 
    @Scheduled(cron = "0 30 6 * * *")
    public void enviarAvisosCobranca1DiaAntes() {

@@ -1,6 +1,6 @@
 package br.autech.springrestapi.model;
 
-import com.fasterxml.jackson.annotation.JsonBackReference;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -41,8 +41,9 @@ public class Cliente implements Serializable {
     private Endereco endereco;
 
     @OneToOne(mappedBy = "cliente")
-    @JsonBackReference
+    @JsonIgnoreProperties("cliente")
     private Assinatura assinatura;
+
     public Cliente() {}
     public Cliente(String cnpjCpf, String nome, String razaoSocialNome, String nomeResponsavel, Endereco endereco, BigDecimal valorMensalidade, String complementoEndereco, String numeroEndereco, String bloqueado, String diaVencimento, String ativo, String email, String telefone) {
         this.cnpjCpf = cnpjCpf;

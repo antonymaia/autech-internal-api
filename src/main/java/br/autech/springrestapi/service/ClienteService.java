@@ -25,6 +25,7 @@ import org.springframework.stereotype.Service;
 
 
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 
@@ -84,6 +85,10 @@ public class ClienteService {
         }
         cliente.setAtivo("S");
         cliente.setBloqueado("N");
+
+        int hoje = LocalDate.now(ZoneId.of("America/Sao_Paulo")).getDayOfMonth();
+        cliente.setDiaVencimento(hoje < 10 ? "0" + hoje : String.valueOf(hoje));
+
         return clienteRepository.save(cliente);
     }
 
@@ -127,7 +132,8 @@ public class ClienteService {
     }
 
     public Cliente update(Cliente cliente) {
-        findByCnpjCpf(cliente.getCnpjCpf());
+        Cliente clienteAtual = findByCnpjCpf(cliente.getCnpjCpf());
+        cliente.setDiaVencimento(clienteAtual.getDiaVencimento());
 
         if (cliente.getEndereco() != null && cliente.getEndereco().getCep().isEmpty())
             throw new BadRequestException("Informe o CEP do endereço");
@@ -265,13 +271,6 @@ public class ClienteService {
     public List<ClienteDTO> buscarClientesPorDiaVencimento(int diaVencimento) {
         String dia = diaVencimento < 10 ? "0" + diaVencimento : String.valueOf(diaVencimento);
         return clienteRepository.buscarResumoClientePorDiaVencimento(dia);
-    }
-
-    public List<ClienteDTO> buscarClientesPorDiaVencimentoa5dias() {
-        LocalDate diatAtual = LocalDate.now();
-        String diaVencimento = (diatAtual.getDayOfMonth() + 5 ) < 10 ? "0" + (diatAtual.getDayOfMonth() + 5 ) : Integer.toString(diatAtual.getDayOfMonth() + 5 );
-
-        return clienteRepository.buscarResumoClientePorDiaVencimento(diaVencimento);
     }
 
 }

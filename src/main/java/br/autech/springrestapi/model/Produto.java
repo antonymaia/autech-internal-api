@@ -1,14 +1,16 @@
 package br.autech.springrestapi.model;
 
+import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import javax.persistence.*;
 import java.io.Serializable;
 import java.math.BigDecimal;
-import java.util.HashSet;
-import java.util.Set;
 
+@AllArgsConstructor
+@NoArgsConstructor
 @Getter
 @Setter
 @Entity
@@ -17,21 +19,10 @@ public class Produto implements Serializable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name="ID_PRODUTO")
-    private String idProduto;
+    @Column(name = "ID_PRODUTO")
+    private Long idProduto;
     private String nome;
+    private String descricao;
+    @Column(precision = 18, scale = 2)
     private BigDecimal valor;
-
-
-    public Produto() {
-    }
-
-    public Produto(String nome, BigDecimal valor) {
-        super();
-        this.nome = nome;
-        this.valor = valor;
-
-    }
-
-
 }

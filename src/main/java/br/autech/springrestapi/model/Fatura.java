@@ -9,7 +9,9 @@ import javax.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 @Getter
@@ -22,21 +24,28 @@ public class Fatura {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+    @Column(name = "STATUS")
     private Integer estado;
     private BigDecimal valor;
+    @Column(name = "DATA_VENCIMENTO")
     @JsonFormat(pattern="dd/MM/yyyy")
     private LocalDate dataVencimento;
+    @Column(name = "DATA_HORA_PAGAMENTO")
     @JsonFormat(pattern="dd/MM/yyyy HH:mm:ss")
     private LocalDateTime dataPagamento;
     @Column(name = "CREATED_AT")
     @JsonFormat(pattern="dd/MM/yyyy HH:mm:ss")
     private LocalDateTime createdAt;
+
     @JsonIgnore
     @ManyToOne
     @JoinColumn(name = "cliente_id")
     private Cliente cliente;
     @OneToMany(mappedBy = "id.fatura")
     private Set<PagamentoFatura> pagamentos = new HashSet<>();
+
+    @OneToMany(mappedBy = "fatura", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<FaturaItem> itens = new ArrayList<>();
 
     public Fatura(Long id, EstadoFatura estadoFatura, BigDecimal valor, LocalDate dataVencimento, LocalDateTime dataPagamento, LocalDateTime createdAt, Cliente cliente, Set<PagamentoFatura> pagamentos) {
         this.id = id;

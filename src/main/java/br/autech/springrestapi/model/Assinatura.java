@@ -2,18 +2,20 @@ package br.autech.springrestapi.model;
 
 import br.autech.springrestapi.model.enums.StatusAssinatura;
 import br.autech.springrestapi.model.enums.TipoAssinatura;
-import com.fasterxml.jackson.annotation.JsonManagedReference;
-import lombok.Getter;
-import lombok.Setter;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import lombok.*;
 
 
 import javax.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 
 @Table(name = "ASSINATURA")
-@Getter
-@Setter
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
 @Entity
 public class Assinatura {
 
@@ -21,31 +23,23 @@ public class Assinatura {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name="ID_ASSINATURA")
     private Long id;
-    private LocalDate data_inicio;
-    private LocalDate data_fim;
     @Column(precision = 18, scale = 2)
     private BigDecimal valor_total;
+    @Column(name = "DATA_INICIO")
+    private LocalDate dataInicial;
 
     @Enumerated(EnumType.STRING)
     private TipoAssinatura tipo_assinatura;
 
     @OneToOne
     @JoinColumn(name = "id_cliente")
-    @JsonManagedReference
+    @JsonIgnoreProperties("assinatura")
     private Cliente cliente;
 
     @Enumerated(EnumType.STRING)
     private StatusAssinatura status;
 
-    public Assinatura() {
-    }
+    @OneToMany(mappedBy = "assinatura", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<AssinaturaProduto> produtos = new ArrayList<>();
 
-    public Assinatura(LocalDate data_inicio, LocalDate data_fim, BigDecimal valor_total, TipoAssinatura tipo_assinatura,  Cliente cliente, StatusAssinatura status) {
-        this.data_inicio =  data_inicio;
-        this.data_fim = data_fim;
-        this.valor_total = valor_total;
-        this.tipo_assinatura = tipo_assinatura;
-        this.cliente = cliente;
-        this.status = status;
-    }
 }

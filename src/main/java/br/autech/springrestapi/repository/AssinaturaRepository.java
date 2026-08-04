@@ -7,11 +7,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
 
-public interface AssinaturaRepository extends JpaRepository<Assinatura,Integer> {
-
+public interface AssinaturaRepository extends JpaRepository<Assinatura, Long> {
 
     Optional<Assinatura> findByCliente_CnpjCpf(@Param("clienteId") String clienteId);
-
-
-
 }

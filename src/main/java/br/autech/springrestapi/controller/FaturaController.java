@@ -23,7 +23,7 @@ public class FaturaController {
 
     @GetMapping("/gerar-faturas")
     public ResponseEntity<Void> gerarFaturas(){
-        faturaService.gerarFaturas5dias();
+        faturaService.gerarFaturasProximoCiclo();
         return ResponseEntity.ok().build();
     }
 
