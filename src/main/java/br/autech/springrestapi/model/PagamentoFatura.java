@@ -11,7 +11,7 @@ import java.io.Serializable;
 
 @AllArgsConstructor
 @NoArgsConstructor
-@Entity
+@Entity(name = "PAGAMENTO_FATURA")
 public class PagamentoFatura implements Serializable {
     private static final long serialVersionUID = 1L;
 

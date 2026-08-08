@@ -1,9 +1,11 @@
 package br.autech.springrestapi.controller;
 
+import br.autech.springrestapi.dtos.GerarFaturaResponse;
 import br.autech.springrestapi.model.Fatura;
 import br.autech.springrestapi.model.Pagamento;
 import br.autech.springrestapi.service.FaturaService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -25,6 +27,13 @@ public class FaturaController {
     public ResponseEntity<Void> gerarFaturas(){
         faturaService.gerarFaturasProximoCiclo();
         return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/cliente/{cnpjCpf}/gerar")
+    public ResponseEntity<GerarFaturaResponse> gerarManual(@PathVariable String cnpjCpf){
+        GerarFaturaResponse resp = faturaService.gerarFaturaManual(cnpjCpf);
+        HttpStatus status = resp.isGerada() ? HttpStatus.CREATED : HttpStatus.OK;
+        return ResponseEntity.status(status).body(resp);
     }
 
     @GetMapping("/cliente/{cnpjCpf}")

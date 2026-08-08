@@ -17,24 +17,26 @@ import java.util.Objects;
 @ToString
 @AllArgsConstructor
 @NoArgsConstructor
-@Entity
+@Entity(name = "PAGAMENTO")
 @Inheritance(strategy=InheritanceType.JOINED)
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.PROPERTY, property = "tipo" )
 @JsonSubTypes({
         @JsonSubTypes.Type(value = PagamentoCartaoCredito.class, name = "cartaoCredito"),
         @JsonSubTypes.Type(value = PagamentoCartaoDebito.class, name = "cartaoDebito"),
         @JsonSubTypes.Type(value = PagamentoPix.class, name = "pix"),
-        @JsonSubTypes.Type(value = PagamentoDinheiro.class, name = "dinheiro")
+        @JsonSubTypes.Type(value = PagamentoDinheiro.class, name = "dinheiro"),
+        @JsonSubTypes.Type(value = PagamentoBoleto.class, name = "boleto")
 })
 public class Pagamento implements Serializable {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id", nullable = false)
     private Long id;
+    @Column(name = "VALOR_PAGAMENTO")
     private BigDecimal valorPagamento;
     @JsonFormat(pattern="dd/MM/yyyy HH:mm:ss")
+    @Column(name = "CREATED_AT")
     private LocalDateTime createdAt;
-    private String estado;
 
     @Override
     public boolean equals(Object o) {

@@ -10,7 +10,7 @@ import javax.persistence.Entity;
 
 @Getter
 @Setter
-@Entity
+@Entity(name = "PAGAMENTO_PIX")
 @JsonTypeName("pix")
 public class PagamentoPix extends Pagamento{
 }

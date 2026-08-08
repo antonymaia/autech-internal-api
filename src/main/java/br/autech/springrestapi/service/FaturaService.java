@@ -1,6 +1,7 @@
 package br.autech.springrestapi.service;
 
 import br.autech.springrestapi.dtos.ClienteDTO;
+import br.autech.springrestapi.dtos.GerarFaturaResponse;
 import br.autech.springrestapi.model.*;
 import br.autech.springrestapi.model.enums.EstadoFatura;
 import br.autech.springrestapi.model.enums.StatusAssinatura;
@@ -60,6 +61,7 @@ public class FaturaService {
     private final Environment environment;
 
     private static final ZoneId BRASIL = ZoneId.of("America/Sao_Paulo");
+    private static final DateTimeFormatter FORMATTER_BR = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     public Fatura buscarPorId(Long id) {
         return faturaRepository.findById(id).orElseThrow(() -> {
@@ -173,6 +175,68 @@ public class FaturaService {
         return fatura;
     }
 
+    /**
+     * Geração manual da fatura de UM cliente para o mes atual.
+     * Usada quando o cron não rodou (ex.: deploy no meio do dia) e é preciso
+     * criar a fatura sob demanda. Respeita todos os critérios de elegibilidade
+     * do cron. Se ja existe fatura pro vencimento calculado, retorna aviso sem
+     * duplicar.
+     */
+    @Transactional
+    public GerarFaturaResponse gerarFaturaManual(String cnpjCpf) {
+        Cliente cliente = clienteService.findByCnpjCpf(cnpjCpf);
+
+        if (!"S".equalsIgnoreCase(cliente.getAtivo())) {
+            return new GerarFaturaResponse(false,
+                    "Cliente esta inativo. Fatura nao gerada.", null);
+        }
+
+        Assinatura assinatura = cliente.getAssinatura();
+        if (assinatura == null) {
+            return new GerarFaturaResponse(false,
+                    "Cliente nao possui assinatura. Fatura nao gerada.", null);
+        }
+        if (assinatura.getStatus() != StatusAssinatura.ATIVA) {
+            return new GerarFaturaResponse(false,
+                    "Assinatura nao esta ATIVA (atual: " + assinatura.getStatus() + "). Fatura nao gerada.",
+                    null);
+        }
+        if (assinatura.getProdutos() == null || assinatura.getProdutos().isEmpty()) {
+            return new GerarFaturaResponse(false,
+                    "Assinatura nao possui produtos. Fatura nao gerada.", null);
+        }
+
+        int dia;
+        try {
+            dia = Integer.parseInt(cliente.getDiaVencimento());
+        } catch (NumberFormatException e) {
+            return new GerarFaturaResponse(false,
+                    "diaVencimento invalido no cadastro do cliente: '" + cliente.getDiaVencimento() + "'.",
+                    null);
+        }
+
+        LocalDate hoje = LocalDate.now(BRASIL);
+        int diaAjustado = Math.min(dia, hoje.lengthOfMonth());
+        LocalDate dataVencimento = hoje.withDayOfMonth(diaAjustado);
+
+        if (faturaRepository.existsByCliente_CnpjCpfAndDataVencimento(cnpjCpf, dataVencimento)) {
+            Fatura existente = faturaRepository.findAllByCliente(cliente).stream()
+                    .filter(f -> dataVencimento.equals(f.getDataVencimento()))
+                    .findFirst()
+                    .orElse(null);
+            return new GerarFaturaResponse(false,
+                    "Ja existe fatura para o vencimento " + dataVencimento.format(FORMATTER_BR) + ".",
+                    existente);
+        }
+
+        Fatura fatura = montarFaturaComItens(cliente, assinatura, dataVencimento);
+        fatura = faturaRepository.save(fatura);
+
+        return new GerarFaturaResponse(true,
+                "Fatura gerada com sucesso para vencimento " + dataVencimento.format(FORMATTER_BR) + ".",
+                fatura);
+    }
+
     @Transactional
     public void bloquearInadimplentes() {
         LocalDate limite = LocalDate.now(BRASIL).minusDays(7);
@@ -256,39 +320,33 @@ public class FaturaService {
         return faturaRepository.findAllByCliente(cliente);
     }
 
+    @Transactional
     public Fatura adicionarPagamento(Long faturaId, Pagamento pagamento) {
         Fatura fatura = buscarPorId(faturaId);
 
-        if (fatura.getEstado().getCod() == 2) {
+        if (fatura.getEstado() == EstadoFatura.PAGA) {
             throw new BadRequestException("Fatura já paga");
         }
-
-        BigDecimal valorTotalPagamentos = BigDecimal.valueOf(0);
-        for (PagamentoFatura pf : fatura.getPagamentos()) {
-            valorTotalPagamentos = valorTotalPagamentos
-                    .add(pf.getPagamento().getValorPagamento());
+        if (!fatura.getPagamentos().isEmpty()) {
+            throw new BadRequestException("Fatura já possui pagamento registrado");
         }
-
-        BigDecimal restantePagar = fatura.getValor().subtract(valorTotalPagamentos);
-        if (pagamento.getValorPagamento().compareTo(restantePagar) > 0) {
-            throw new BadRequestException("Valor maior que o restante a pagar");
+        if (pagamento.getValorPagamento() == null) {
+            throw new BadRequestException("valorPagamento obrigatorio");
         }
-
-        valorTotalPagamentos = valorTotalPagamentos.add(pagamento.getValorPagamento());
+        if (pagamento.getValorPagamento().compareTo(fatura.getValor()) != 0) {
+            throw new BadRequestException(
+                    "Pagamento deve ser integral. Valor esperado: " + fatura.getValor().toPlainString());
+        }
 
         pagamento.setCreatedAt(LocalDateTime.now());
         pagamento = pagamentoRepository.save(pagamento);
 
         PagamentoFaturaId pagamentoFaturaId = new PagamentoFaturaId(pagamento, fatura);
         PagamentoFatura pagamentoFatura = new PagamentoFatura(pagamentoFaturaId);
-
         fatura.getPagamentos().add(pagamentoFaturaRepository.save(pagamentoFatura));
 
-
-        if (valorTotalPagamentos.equals(fatura.getValor())) {
-            fatura.setDataPagamento(LocalDateTime.now());
-            fatura.setEstado(EstadoFatura.PAGA);
-        }
+        fatura.setDataPagamento(LocalDateTime.now());
+        fatura.setEstado(EstadoFatura.PAGA);
 
         return faturaRepository.save(fatura);
     }

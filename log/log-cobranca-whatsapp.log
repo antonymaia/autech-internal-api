@@ -1,14 +1,1 @@
-2026-08-04 06:31:12.738 WARN  - [1 dia antes] Cliente 03333567473 (KMCLOSETBRASIL) sem valorMensalidade. Mensagem nao enviada. Vencimento: 05/08/2026, Telefone: 111111111
-2026-08-04 06:31:22.840 WARN  - [1 dia antes] Cliente 03333576473 (KASSANDAR) sem valorMensalidade. Mensagem nao enviada. Vencimento: 05/08/2026, Telefone: 11111111
-2026-08-04 06:31:33.211 ERROR - [1 dia antes] Falha ao enviar WhatsApp. Cliente: 08144774000106 (DIEGO), Telefone: 5581997895852, Vencimento: 05/08/2026, Valor: 210.00, Erro: 400 Bad Request: "{"status":400,"error":"Bad Request","response":{"message":[{"jid":"558197895852@s.whatsapp.net","exists":false,"number":"5581997895852"}]}}"
-2026-08-04 06:31:43.221 WARN  - [1 dia antes] Cliente 78016169449 (EVANDRO ALTO DA FAVELA) sem valorMensalidade. Mensagem nao enviada. Vencimento: 05/08/2026, Telefone: 983481031
-2026-08-04 06:31:53.259 WARN  - [1 dia antes] Cliente 7801661669449 (EVANDRO ALTO DA FAVELA) sem valorMensalidade. Mensagem nao enviada. Vencimento: 05/08/2026, Telefone: 983481031
-2026-08-04 06:32:03.271 WARN  - [1 dia antes] Cliente 45122095000154 (ANA P DE ANDRADE ALIMENTOS) sem valorMensalidade. Mensagem nao enviada. Vencimento: 05/08/2026, Telefone: 985864731
-2026-08-04 06:32:36.746 WARN  - [1 dia antes] Cliente 40151395000148 (FA BURGUER ) sem valorMensalidade. Mensagem nao enviada. Vencimento: 05/08/2026, Telefone: 8132311067
-2026-08-04 06:32:58.179 WARN  - [1 dia antes] Cliente 18962781000160 (JOSIVALDO FERNANDES FERREIRA DA SILVA) sem telefone cadastrado. Vencimento: 05/08/2026, Valor: 65.00
-2026-08-04 06:34:54.486 WARN  - [1 dia antes] Cliente 12270148000125 (AURELICE FERREIRA DA CRUZ) sem valorMensalidade. Mensagem nao enviada. Vencimento: 05/08/2026, Telefone: 111111111
-2026-08-04 06:35:16.162 WARN  - [1 dia antes] Cliente 25227824000120 (MARIA JOSE BAZANTE LANCHES) sem valorMensalidade. Mensagem nao enviada. Vencimento: 05/08/2026, Telefone: 987172782
-2026-08-04 06:35:26.176 WARN  - [1 dia antes] Cliente 31567872000160 (ROBERTO LUIS DA SILVA 03160705480) sem valorMensalidade. Mensagem nao enviada. Vencimento: 05/08/2026, Telefone: 11111111
-2026-08-04 06:35:47.618 WARN  - [1 dia antes] Cliente 12880007600013 (MANUEL VITOR CARNEIRO) sem telefone cadastrado. Vencimento: 05/08/2026, Valor: 100.00
-2026-08-04 06:35:57.619 WARN  - [1 dia antes] Cliente 12880007600038 (MANUEL VITOR CARNEIRO) sem telefone cadastrado. Vencimento: 05/08/2026, Valor: 100.00
-2026-08-04 06:36:55.870 WARN  - [1 dia antes] Cliente 11111111111111 (teste) sem valorMensalidade. Mensagem nao enviada. Vencimento: 05/08/2026, Telefone: 11111111111
+2026-08-08 06:30:00.105 WARN  - [1 dia antes] Cliente 41073728000120 (MONICA PATRICIA DIMAS DE ALMEIDA 01191404463) sem valorMensalidade. Mensagem nao enviada. Vencimento: 09/08/2026, Telefone: 34285528

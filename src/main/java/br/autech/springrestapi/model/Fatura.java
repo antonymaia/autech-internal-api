@@ -41,6 +41,7 @@ public class Fatura {
     @ManyToOne
     @JoinColumn(name = "cliente_id")
     private Cliente cliente;
+
     @OneToMany(mappedBy = "id.fatura")
     private Set<PagamentoFatura> pagamentos = new HashSet<>();
 
