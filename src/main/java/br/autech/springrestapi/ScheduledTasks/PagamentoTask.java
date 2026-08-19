@@ -50,7 +50,7 @@ public class PagamentoTask {
       }
    }
 
-   @Scheduled(cron = "0 20 5 * * *")
+   /*@Scheduled(cron = "0 20 5 * * *")
    public void bloquearInadimplentesDseteMais() {
       log.info("[Fatura - Bloqueio D+7] Inicializando...");
       try {
@@ -58,7 +58,7 @@ public class PagamentoTask {
       } catch (Exception e) {
          log.error("[Fatura - Bloqueio D+7] Erro: {}", e.getMessage(), e);
       }
-   }
+   }*/
 
    @Scheduled(cron = "0 30 6 * * *")
    public void enviarAvisosCobranca1DiaAntes() {
