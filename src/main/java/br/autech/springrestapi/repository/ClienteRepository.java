@@ -70,7 +70,7 @@ public interface ClienteRepository extends JpaRepository<Cliente, String> {
       ") FROM Cliente c " +
       " LEFT JOIN c.endereco e " +
       " WHERE c.ativo = 'S' AND c.diaVencimento LIKE :diaVencimento ")
-   List<ClienteDTO> buscarResumoClientePorDiaVencimento(String diaVencimento);
+   List<ClienteDTO> buscarResumoClienteAtivosPorDiaVencimento(String diaVencimento);
 
    @Query(value = "" +
       " SELECT new br.autech.springrestapi.dtos.ClienteDTO(" +

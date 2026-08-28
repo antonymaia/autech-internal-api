@@ -16,7 +16,6 @@ import org.springframework.core.env.Environment;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.mail.MailException;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
@@ -268,9 +267,9 @@ public class ClienteService {
         return clienteRepository.countByBloqueadoAndAtivo(bloqueado, "S");
     }
 
-    public List<ClienteDTO> buscarClientesPorDiaVencimento(int diaVencimento) {
+    public List<ClienteDTO> buscarClientesAtivosPorDiaVencimento(int diaVencimento) {
         String dia = diaVencimento < 10 ? "0" + diaVencimento : String.valueOf(diaVencimento);
-        return clienteRepository.buscarResumoClientePorDiaVencimento(dia);
+        return clienteRepository.buscarResumoClienteAtivosPorDiaVencimento(dia);
     }
 
 }

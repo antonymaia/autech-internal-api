@@ -69,27 +69,15 @@ public class FaturaService {
         });
     }
 
-    /**
-     * Gera a fatura do proximo ciclo para os clientes cujo vencimento foi ontem.
-     * Ex.: cliente com diaVencimento=05 tem a fatura de agosto gerada em 06/julho,
-     * com dataVencimento=05/agosto. Isso trava o snapshot da assinatura no inicio
-     * do ciclo — mudancas feitas ao longo do mes so afetam a fatura seguinte.
-     *
-     * Criterios de elegibilidade:
-     *   - cliente.ativo = "S"
-     *   - cliente possui assinatura
-     *   - assinatura.status = ATIVA
-     *   - assinatura possui pelo menos 1 produto
-     */
     @Transactional
-    public void gerarFaturasProximoCiclo() {
-        LocalDate diaAnterior = LocalDate.now(BRASIL).minusDays(1);
-        int diaVencimentoBuscado = diaAnterior.getDayOfMonth();
-        LocalDate dataVencimento = diaAnterior.plusMonths(1);
+    public void gerarFaturas() {
+        LocalDate dataVencimento = LocalDate.now().plusDays(5);
+        int diaVencimentoBuscado = dataVencimento.getDayOfMonth();
 
-        List<ClienteDTO> listaCliente = clienteService.buscarClientesPorDiaVencimento(diaVencimentoBuscado);
-        log.info("[Gerar faturas proximo ciclo] {} cliente(s) com dia_vencimento={}. Nova fatura vence em {}",
-                listaCliente.size(), diaVencimentoBuscado, dataVencimento);
+        List<ClienteDTO> listaCliente = clienteService.buscarClientesAtivosPorDiaVencimento(diaVencimentoBuscado);
+
+        log.info("[Gerar faturas] {} cliente(s) com dia_vencimento={}",
+                listaCliente.size(), diaVencimentoBuscado);
 
         int geradas = 0;
         int jaExistia = 0;
@@ -107,11 +95,6 @@ public class FaturaService {
 
                 Cliente cliente = clienteService.findByCnpjCpf(clienteDto.getCnpjCpf());
 
-                if (!"S".equalsIgnoreCase(cliente.getAtivo())) {
-                    clienteInativo++;
-                    continue;
-                }
-
                 Assinatura assinatura = cliente.getAssinatura();
                 if (assinatura == null) {
                     semAssinatura++;
@@ -127,7 +110,7 @@ public class FaturaService {
 
                 if (assinatura.getProdutos() == null || assinatura.getProdutos().isEmpty()) {
                     assinaturaSemProdutos++;
-                    log.warn("[Gerar faturas proximo ciclo] Cliente {} tem assinatura ATIVA sem produtos. Fatura nao gerada.",
+                    log.warn("[Gerar faturas] Cliente {} tem assinatura ATIVA sem produtos. Fatura nao gerada.",
                             cliente.getCnpjCpf());
                     continue;
                 }
@@ -136,10 +119,10 @@ public class FaturaService {
                 faturaRepository.save(fatura);
                 geradas++;
             } catch (Exception e) {
-                log.error("[Gerar faturas proximo ciclo] Erro no cliente {}: {}", clienteDto.getCnpjCpf(), e.getMessage(), e);
+                log.error("[Gerar faturas] Erro no cliente {}: {}", clienteDto.getCnpjCpf(), e.getMessage(), e);
             }
         }
-        log.info("[Gerar faturas proximo ciclo] Concluido. Geradas={}, ja existia={}, cliente inativo={}, sem assinatura={}, assinatura nao ativa={}, sem produtos={}",
+        log.info("[Gerar faturas] Concluido. Geradas={}, ja existia={}, cliente inativo={}, sem assinatura={}, assinatura nao ativa={}, sem produtos={}",
                 geradas, jaExistia, clienteInativo, semAssinatura, assinaturaNaoAtiva, assinaturaSemProdutos);
     }
 

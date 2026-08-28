@@ -30,10 +30,10 @@ public class PagamentoTask {
    private static final ZoneId BRASIL = ZoneId.of("America/Sao_Paulo");
 
    @Scheduled(cron = "0 0 5 * * *")
-   public void gerarFaturasProximoCiclo() {
+   public void gerarFaturasAntesVencimento() {
       log.info("[Fatura - Gerar proximo ciclo] Inicializando...");
       try {
-         faturaService.gerarFaturasProximoCiclo();
+         faturaService.gerarFaturas();
       } catch (Exception e) {
          log.error("[Fatura - Gerar proximo ciclo] Erro: {}", e.getMessage(), e);
       }
@@ -65,7 +65,7 @@ public class PagamentoTask {
       log.info("[WhatsApp - Aviso 1 dia antes do vencimento] Inicializando...");
 
       LocalDate amanha = LocalDate.now(BRASIL).plusDays(1);
-      List<ClienteDTO> clientes = clienteService.buscarClientesPorDiaVencimento(amanha.getDayOfMonth());
+      List<ClienteDTO> clientes = clienteService.buscarClientesAtivosPorDiaVencimento(amanha.getDayOfMonth());
 
       for (ClienteDTO cliente : clientes) {
          try {
@@ -89,7 +89,7 @@ public class PagamentoTask {
    public void enviarAvisosCobrancaDiaDoVencimento() {
       log.info("[WhatsApp - Aviso no dia do vencimento] Inicializando...");
       LocalDate hoje = LocalDate.now(BRASIL);
-      List<ClienteDTO> clientes = clienteService.buscarClientesPorDiaVencimento(hoje.getDayOfMonth());
+      List<ClienteDTO> clientes = clienteService.buscarClientesAtivosPorDiaVencimento(hoje.getDayOfMonth());
       for (ClienteDTO cliente : clientes) {
          try {
             whatsAppService.enviarAvisoCobrancaDia(cliente, hoje);
