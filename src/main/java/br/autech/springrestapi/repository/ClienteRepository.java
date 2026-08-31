@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
@@ -167,4 +168,13 @@ public interface ClienteRepository extends JpaRepository<Cliente, String> {
       ") FROM Cliente c " +
       " WHERE c.cnpjCpf = :cnpjCpf ")
    ClienteDadosCobrancaDto buscarDadosCobranca(String cnpjCpf);
+
+   @Query(value = "SELECT COUNT(c.cnpjCpf) FROM Cliente c WHERE c.ativo = 'S' AND c.bloqueado = 'N' ")
+   Integer numberActiveCostomers();
+
+   @Query(value = "SELECT COUNT(c.cnpjCpf) FROM Cliente c WHERE c.ativo = 'S' AND c.bloqueado = 'S' ")
+   Integer numberBlockedCustomers();
+
+   @Query(value = "SELECT SUM(c.valorMensalidade) FROM Cliente c WHERE c.ativo = 'S' ")
+   BigDecimal getTotalIncome();
 }
