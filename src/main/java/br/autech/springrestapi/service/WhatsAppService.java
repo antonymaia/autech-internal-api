@@ -2,6 +2,8 @@ package br.autech.springrestapi.service;
 
 import br.autech.springrestapi.dtos.ClienteDTO;
 import br.autech.springrestapi.dtos.ClienteDadosCobrancaDto;
+import br.autech.springrestapi.model.Cliente;
+import br.autech.springrestapi.model.Fatura;
 import br.autech.springrestapi.repository.ClienteRepository;
 import br.autech.springrestapi.service.exception.BadRequestException;
 import lombok.RequiredArgsConstructor;
@@ -248,6 +250,74 @@ public class WhatsAppService {
 
       // Fallback: pega os últimos 8 dígitos e monta o número completo
       return "5581" + "9" + d.substring(d.length() - 8);
+   }
+
+   public void enviarAvisoFaturaGerada(Cliente cliente, Fatura fatura) {
+      String contexto = "fatura gerada";
+      if (cliente == null || fatura == null
+              || fatura.getValor() == null || fatura.getDataVencimento() == null) {
+         LOG_COBRANCA.warn("[{}] Dados invalidos para envio (cliente ou fatura nulos).", contexto);
+         return;
+      }
+
+      if (!isConfigurado()) {
+         LOG_COBRANCA.warn("[{}] WhatsApp Evolution API nao configurada. Fatura {} do cliente {} nao notificada.",
+                 contexto, fatura.getId(), cliente.getCnpjCpf());
+         return;
+      }
+
+      String telefone = cliente.getTelefone();
+      if (telefone == null || telefone.isBlank()) {
+         LOG_COBRANCA.warn("[{}] Cliente {} ({}) sem telefone. Fatura {} nao notificada.",
+                 contexto, cliente.getCnpjCpf(), nomeClienteParaLog(cliente), fatura.getId());
+         return;
+      }
+
+      String telefoneFormatado = normalizarTelefone(telefone);
+      if (telefoneFormatado == null) {
+         LOG_COBRANCA.warn("[{}] Telefone invalido para cliente {} ({}): '{}'. Fatura {} nao notificada.",
+                 contexto, cliente.getCnpjCpf(), nomeClienteParaLog(cliente), telefone, fatura.getId());
+         return;
+      }
+
+      String nome = resolverNomeCliente(cliente);
+      String valor = "R$ " + fatura.getValor().toPlainString().replace(".", ",");
+      String vencimento = fatura.getDataVencimento().format(FORMATTER);
+
+      String mensagem = String.format(
+         "Olá, %s! 👋%n%n" +
+            "Sua fatura *AUTECH* foi gerada.%n%n" +
+            "📅 Vencimento: *%s*%n" +
+            "💰 Valor: *%s*%n%n" +
+            "Chave Pix CNPJ%n" +
+            "_%s_%n" +
+            "_%s_%n%n" +
+            "Efetue o pagamento até o vencimento para evitar a interrupção do serviço.%n" +
+            "Dúvidas? Entre em contato conosco. 😊",
+         nome, vencimento, valor, chavePix, nomePix);
+
+      try {
+         ResponseEntity<String> response = doSend(telefoneFormatado, mensagem);
+         log.info("WhatsApp [{}] enviado para {} ({}) tel {} - fatura {} - status {}",
+                 contexto, cliente.getCnpjCpf(), nome, telefoneFormatado,
+                 fatura.getId(), response.getStatusCode());
+      } catch (Exception e) {
+         LOG_COBRANCA.error("[{}] Falha ao enviar WhatsApp. Cliente: {} ({}), Telefone: {}, Fatura: {}, Vencimento: {}, Valor: {}, Erro: {}",
+                 contexto, cliente.getCnpjCpf(), nome, telefoneFormatado,
+                 fatura.getId(), vencimento, valor, e.getMessage());
+      }
+   }
+
+   private String resolverNomeCliente(Cliente cliente) {
+      String nomeResp = cliente.getNomeResponsavel();
+      if (nomeResp != null && !nomeResp.isBlank()) return nomeResp;
+      return cliente.getNome() != null ? cliente.getNome() : "";
+   }
+
+   private String nomeClienteParaLog(Cliente cliente) {
+      String nomeResp = cliente.getNomeResponsavel();
+      if (nomeResp != null && !nomeResp.isBlank()) return nomeResp;
+      return cliente.getNome() != null ? cliente.getNome() : "sem nome";
    }
 
    public void enviarMensagemCobranca(String cnpjCpf) {
