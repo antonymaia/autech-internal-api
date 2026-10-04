@@ -29,7 +29,7 @@ public class PagamentoTask {
 
    private static final ZoneId BRASIL = ZoneId.of("America/Sao_Paulo");
 
-   @Scheduled(cron = "0 0 5 * * *")
+   /*@Scheduled(cron = "0 0 5 * * *")
    public void gerarFaturasAntesVencimento() {
       log.info("[Fatura - Gerar proximo ciclo] Inicializando...");
       try {
@@ -37,8 +37,9 @@ public class PagamentoTask {
       } catch (Exception e) {
          log.error("[Fatura - Gerar proximo ciclo] Erro: {}", e.getMessage(), e);
       }
-   }
+   }*/
 
+   /*
    @Scheduled(cron = "0 10 5 * * *")
    public void marcarFaturasVencidas() {
       log.info("[Fatura - Marcar vencidas] Inicializando...");
@@ -48,7 +49,7 @@ public class PagamentoTask {
       } catch (Exception e) {
          log.error("[Fatura - Marcar vencidas] Erro: {}", e.getMessage(), e);
       }
-   }
+   }*/
 
    /*@Scheduled(cron = "0 20 5 * * *")
    public void bloquearInadimplentesDseteMais() {
