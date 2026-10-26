@@ -95,20 +95,12 @@ public class FaturaService {
 
             if (resultado == null) continue;
             switch (resultado.razao) {
-               case GERADA:
-                  geradas++;
-                  whatsAppService.enviarAvisoFaturaGerada(resultado.cliente, resultado.fatura);
-                  Thread.sleep(10000);
-                  break;
-               case JA_EXISTIA:            jaExistia++; break;
-               case SEM_ASSINATURA:        semAssinatura++; break;
-               case ASSINATURA_NAO_ATIVA:  assinaturaNaoAtiva++; break;
-               case SEM_PRODUTOS:          assinaturaSemProdutos++; break;
+               case GERADA:               geradas++; break;
+               case JA_EXISTIA:           jaExistia++; break;
+               case SEM_ASSINATURA:       semAssinatura++; break;
+               case ASSINATURA_NAO_ATIVA: assinaturaNaoAtiva++; break;
+               case SEM_PRODUTOS:         assinaturaSemProdutos++; break;
             }
-         } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            log.error("[Gerar faturas] Processo interrompido.", e);
-            break;
          } catch (Exception e) {
             log.error("[Gerar faturas] Erro no cliente {}: {}", clienteDto.getCnpjCpf(), e.getMessage(), e);
          }
@@ -246,7 +238,6 @@ public class FaturaService {
 
       Fatura fatura = montarFaturaComItens(cliente, assinatura, dataVencimento);
       fatura = faturaRepository.save(fatura);
-      whatsAppService.enviarAvisoFaturaGerada(cliente, fatura);
 
       return new GerarFaturaResponse(true,
          "Fatura gerada com sucesso para vencimento " + dataVencimento.format(FORMATTER_BR) + ".",

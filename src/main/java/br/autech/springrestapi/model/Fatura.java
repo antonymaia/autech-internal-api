@@ -48,6 +48,10 @@ public class Fatura {
     @OneToMany(mappedBy = "fatura", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<FaturaItem> itens = new ArrayList<>();
 
+    @JsonIgnore
+    @Column(name = "MP_PAYMENT_ID")
+    private String mpPaymentId;
+
     public Fatura(Long id, EstadoFatura estadoFatura, BigDecimal valor, LocalDate dataVencimento, LocalDateTime dataPagamento, LocalDateTime createdAt, Cliente cliente, Set<PagamentoFatura> pagamentos) {
         this.id = id;
         this.estado = estadoFatura.getCod();
