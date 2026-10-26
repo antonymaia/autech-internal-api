@@ -203,12 +203,13 @@ public class MercadoPagoService {
             }
             if (ts == null || v1 == null) return false;
 
+            String secret = webhookSecret.trim();
             String template = "id:" + dataId + ";"
                     + (xRequestId != null ? "request-id:" + xRequestId + ";" : "")
                     + "ts:" + ts + ";";
 
             Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec(webhookSecret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
             byte[] hash = mac.doFinal(template.getBytes(StandardCharsets.UTF_8));
 
             StringBuilder hex = new StringBuilder();
@@ -217,8 +218,11 @@ public class MercadoPagoService {
 
             boolean ok = calculado.equalsIgnoreCase(v1);
             if (!ok) {
-                log.warn("[MercadoPago] HMAC nao bate — template='{}', esperado='{}', recebido='{}', secretLen={}",
-                        template, calculado, v1, webhookSecret.length());
+                String preview = secret.length() > 10
+                        ? secret.substring(0, 4) + "..." + secret.substring(secret.length() - 4)
+                        : "***";
+                log.warn("[MercadoPago] HMAC nao bate — template='{}', esperado='{}', recebido='{}', secretLen={}, secretPreview={}",
+                        template, calculado, v1, secret.length(), preview);
             }
             return ok;
         } catch (Exception e) {
