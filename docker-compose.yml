@@ -9,7 +9,7 @@ services:
       - SPRING_PROFILES_ACTIVE=prod
       - TZ=America/Sao_Paulo
       - MP_ACCESS_TOKEN=APP_USR-59618243379652-102608-5ce21851828bd591d7a8de308190220a-3791214097
-      - MP_WEBHOOK_SECRET=92728980f40030c3f4bb56ab84dcac3d99b3c58e6c8f52f027e2aead65b6e4c4
+      - MP_WEBHOOK_SECRET=2b126d12bee89704193dd69d87d7f5b527e09887309c7839f9d0bd3668556b0f
       - MP_WEBHOOK_URL=https://internalapi.autech.net.br/pub/webhook/mercadopago
       - MP_SANDBOX_PAYER_EMAIL=test_user_477609484274299291@testuser.com
       - PORTAL_CORS_ORIGIN=https://pagar.autech.net.br
