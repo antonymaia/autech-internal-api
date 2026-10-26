@@ -99,6 +99,21 @@ public class PortalService {
     }
 
     /**
+     * Reprocessa manualmente uma fatura consultando a order no Mercado Pago.
+     * Usado por admin quando o webhook falhou (ex.: secret rotacionada).
+     * Nao faz validacao HMAC — assume que o chamador tem autoridade.
+     */
+    @Transactional
+    public boolean reprocessarFaturaViaMp(Long faturaId) {
+        Fatura fatura = faturaRepository.findById(faturaId)
+                .orElseThrow(() -> new ObjectNotFoundException("Fatura " + faturaId + " nao encontrada"));
+        if (fatura.getMpOrderId() == null || fatura.getMpOrderId().isBlank()) {
+            throw new BadRequestException("Fatura " + faturaId + " nao tem mpOrderId — nunca foi gerado PIX");
+        }
+        return processarWebhook(fatura.getMpOrderId(), "order");
+    }
+
+    /**
      * Processa a notificacao do Mercado Pago. Idempotente.
      * Aceita o id como order_id OU payment_id (compat com faturas antigas).
      */

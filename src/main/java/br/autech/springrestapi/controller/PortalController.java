@@ -10,6 +10,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import javax.servlet.http.HttpServletRequest;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 /**
  * Endpoints publicos usados pelo portal do cliente (pagar.autech.net.br).
  *
@@ -39,6 +44,18 @@ public class PortalController {
     }
 
     /**
+     * Admin — reprocessa manualmente uma fatura consultando a order no MP.
+     * Use quando o webhook falhou (ex: secret trocada e nao reenviou).
+     */
+    @PostMapping("/admin/fatura/{faturaId}/reprocessar")
+    public ResponseEntity<String> reprocessarFaturaViaMp(@PathVariable Long faturaId) {
+        boolean atualizou = portalService.reprocessarFaturaViaMp(faturaId);
+        return ResponseEntity.ok(atualizou
+                ? "Fatura " + faturaId + " marcada como PAGA"
+                : "Nenhuma mudanca — order nao esta processed, ou fatura ja estava paga");
+    }
+
+    /**
      * Webhook do Mercado Pago. Chamado pelo MP automaticamente.
      *
      * Formatos aceitos:
@@ -52,22 +69,37 @@ public class PortalController {
     public ResponseEntity<Void> webhookMercadoPago(
             @RequestBody(required = false) JsonNode body,
             @RequestParam(name = "id", required = false) String idQuery,
+            @RequestParam(name = "data.id", required = false) String dataIdQuery,
             @RequestParam(name = "topic", required = false) String topicQuery,
             @RequestParam(name = "type", required = false) String typeQuery,
             @RequestHeader(name = "x-signature", required = false) String xSignature,
-            @RequestHeader(name = "x-request-id", required = false) String xRequestId) {
+            @RequestHeader(name = "x-request-id", required = false) String xRequestId,
+            HttpServletRequest request) {
 
-        String recursoId = extrairId(body, idQuery);
+        // Log forense completo pra investigar a assinatura HMAC
+        Map<String, String> headers = new LinkedHashMap<>();
+        Collections.list(request.getHeaderNames()).forEach(h -> headers.put(h, request.getHeader(h)));
+        log.info("[Portal/Webhook] REQUEST — url='{}', query='{}', headers={}, body={}",
+                request.getRequestURL(), request.getQueryString(), headers, body);
+
+        String idFromBody = extrairIdDoBody(body);
+        String idFromUrl = (dataIdQuery != null && !dataIdQuery.isBlank()) ? dataIdQuery : idQuery;
+        String recursoId = idFromBody != null ? idFromBody : idFromUrl;
         String topic = extrairTopic(body, topicQuery, typeQuery);
+
+        log.info("[Portal/Webhook] IDs extraidos — idFromBody='{}', idFromUrl='{}', recursoId usado='{}', topic='{}'",
+                idFromBody, idFromUrl, recursoId, topic);
 
         if (recursoId == null) {
             log.warn("[Portal/Webhook] Payload sem id — ignorando");
             return ResponseEntity.ok().build();
         }
 
-        if (!mercadoPagoService.validarAssinaturaWebhook(xSignature, xRequestId, recursoId)) {
+        // Tenta validar HMAC primeiro com id do URL (padrao do MP), depois com id do body
+        String idParaHmac = idFromUrl != null ? idFromUrl : recursoId;
+        if (!mercadoPagoService.validarAssinaturaWebhook(xSignature, xRequestId, idParaHmac)) {
             log.warn("[Portal/Webhook] Assinatura invalida pro id {} — ignorando (header x-signature='{}')",
-                    recursoId, xSignature);
+                    idParaHmac, xSignature);
             return ResponseEntity.ok().build();
         }
 
@@ -75,19 +107,18 @@ public class PortalController {
         return ResponseEntity.ok().build();
     }
 
-    private String extrairId(JsonNode body, String idQuery) {
-        if (body != null) {
-            JsonNode idNode = body.path("data").path("id");
-            if (!idNode.isMissingNode() && !idNode.isNull()) return idNode.asText();
+    private String extrairIdDoBody(JsonNode body) {
+        if (body == null) return null;
+        JsonNode idNode = body.path("data").path("id");
+        if (!idNode.isMissingNode() && !idNode.isNull()) return idNode.asText();
 
-            JsonNode resource = body.path("resource");
-            if (!resource.isMissingNode() && !resource.isNull()) {
-                String r = resource.asText();
-                int slash = r.lastIndexOf('/');
-                return slash >= 0 && slash < r.length() - 1 ? r.substring(slash + 1) : r;
-            }
+        JsonNode resource = body.path("resource");
+        if (!resource.isMissingNode() && !resource.isNull()) {
+            String r = resource.asText();
+            int slash = r.lastIndexOf('/');
+            return slash >= 0 && slash < r.length() - 1 ? r.substring(slash + 1) : r;
         }
-        return (idQuery != null && !idQuery.isBlank()) ? idQuery : null;
+        return null;
     }
 
     private String extrairTopic(JsonNode body, String topicQuery, String typeQuery) {
