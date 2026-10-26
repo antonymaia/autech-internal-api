@@ -17,6 +17,7 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.util.regex.Pattern;
 
 /**
  * Wrapper em volta do SDK oficial do Mercado Pago.
@@ -25,6 +26,10 @@ import java.nio.charset.StandardCharsets;
 @Slf4j
 @Service
 public class MercadoPagoService {
+
+    private static final Pattern EMAIL_REGEX =
+            Pattern.compile("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$");
+    private static final String EMAIL_FALLBACK = "pagamentos@autech.net.br";
 
     @Value("${mercadopago.access-token:}")
     private String accessToken;
@@ -66,18 +71,16 @@ public class MercadoPagoService {
             throw new MPException("Mercado Pago nao configurado (access-token ausente)");
         }
 
-        String email = (emailCliente != null && !emailCliente.isBlank())
-                ? emailCliente
-                : "pagamentos@autech.net.br";
-
-        String tipoDoc = cnpjCpf.length() == 14 ? "CNPJ" : "CPF";
+        String email = validarEmailOuFallback(emailCliente);
+        String cnpjCpfLimpo = cnpjCpf == null ? "" : cnpjCpf.replaceAll("\\D", "");
+        String tipoDoc = cnpjCpfLimpo.length() == 14 ? "CNPJ" : "CPF";
 
         PaymentPayerRequest payer = PaymentPayerRequest.builder()
                 .email(email)
                 .firstName(nomeCliente != null ? nomeCliente : "Cliente")
                 .identification(IdentificationRequest.builder()
                         .type(tipoDoc)
-                        .number(cnpjCpf)
+                        .number(cnpjCpfLimpo)
                         .build())
                 .build();
 
@@ -92,6 +95,20 @@ public class MercadoPagoService {
 
         PaymentClient client = new PaymentClient();
         return client.create(req);
+    }
+
+    /**
+     * Retorna o email informado se tiver formato valido; caso contrario usa o fallback.
+     * Mercado Pago valida o formato do email no payer e recusa pagamento se invalido.
+     */
+    private String validarEmailOuFallback(String email) {
+        if (email == null || email.isBlank()) return EMAIL_FALLBACK;
+        String trim = email.trim();
+        if (!EMAIL_REGEX.matcher(trim).matches()) {
+            log.warn("[MercadoPago] Email '{}' invalido no cadastro — usando fallback {}", trim, EMAIL_FALLBACK);
+            return EMAIL_FALLBACK;
+        }
+        return trim;
     }
 
     /** Busca um pagamento no Mercado Pago pelo ID. */
