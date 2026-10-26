@@ -213,8 +213,14 @@ public class MercadoPagoService {
 
             StringBuilder hex = new StringBuilder();
             for (byte b : hash) hex.append(String.format("%02x", b));
+            String calculado = hex.toString();
 
-            return hex.toString().equalsIgnoreCase(v1);
+            boolean ok = calculado.equalsIgnoreCase(v1);
+            if (!ok) {
+                log.warn("[MercadoPago] HMAC nao bate — template='{}', esperado='{}', recebido='{}', secretLen={}",
+                        template, calculado, v1, webhookSecret.length());
+            }
+            return ok;
         } catch (Exception e) {
             log.error("[MercadoPago] Erro validando assinatura webhook: {}", e.getMessage(), e);
             return false;
