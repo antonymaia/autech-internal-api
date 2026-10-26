@@ -8,7 +8,7 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=prod
       - TZ=America/Sao_Paulo
-      - MP_ACCESS_TOKEN=APP_USR-59618243379652-102608-5ce21851828bd591d7a8de308190220a-3791214097
+      - MP_ACCESS_TOKEN=APP_USR-502706381060606-102608-4982dec0a131920c0a5b825c1aadb7a9-77040146
       - MP_WEBHOOK_SECRET=92728980f40030c3f4bb56ab84dcac3d99b3c58e6c8f52f027e2aead65b6e4c4
       - MP_WEBHOOK_URL=https://internalapi.autech.net.br/pub/webhook/mercadopago
     # - MP_SANDBOX_PAYER_EMAIL=test_user_477609484274299291@testuser.com
