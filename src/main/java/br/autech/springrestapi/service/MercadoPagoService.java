@@ -43,6 +43,14 @@ public class MercadoPagoService {
     @Value("${mercadopago.webhook-url:}")
     private String webhookUrl;
 
+    /**
+     * Email de "test user" do Mercado Pago. Quando preenchido, substitui o email
+     * real do pagador — usado pra testar em sandbox com credencial de producao.
+     * Em producao real, deixe vazio.
+     */
+    @Value("${mercadopago.sandbox-payer-email:}")
+    private String sandboxPayerEmail;
+
     private final RestTemplate restTemplate = new RestTemplate();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -76,7 +84,8 @@ public class MercadoPagoService {
             throw new IllegalStateException("Mercado Pago nao configurado (access-token ausente)");
         }
 
-        String email = validarEmailOuFallback(emailCliente);
+        boolean modoSandbox = sandboxPayerEmail != null && !sandboxPayerEmail.isBlank();
+        String email = modoSandbox ? sandboxPayerEmail.trim() : validarEmailOuFallback(emailCliente);
         String valorStr = valor.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString();
 
         ObjectNode body = objectMapper.createObjectNode();
@@ -95,10 +104,8 @@ public class MercadoPagoService {
 
         ObjectNode payer = body.putObject("payer");
         payer.put("email", email);
-        // Em sandbox (token TEST-), "APRO" dispara auto-aprovacao do PIX pelo MP,
-        // util pra testar o webhook end-to-end sem precisar de comprador de teste.
-        boolean isSandbox = accessToken != null && accessToken.startsWith("TEST-");
-        if (isSandbox) {
+        // Em sandbox (sandboxPayerEmail setado), "APRO" dispara auto-aprovacao do PIX.
+        if (modoSandbox) {
             payer.put("first_name", "APRO");
         } else if (nomeCliente != null && !nomeCliente.isBlank()) {
             payer.put("first_name", nomeCliente);
