@@ -213,7 +213,10 @@ public class PortalService {
     // ---------- helpers ----------
 
     private boolean isOrderReaproveitavel(String status) {
-        return "pending".equalsIgnoreCase(status) || "created".equalsIgnoreCase(status);
+        // Em Orders API, o status enquanto aguarda pagamento e "action_required"
+        return "action_required".equalsIgnoreCase(status)
+                || "pending".equalsIgnoreCase(status)
+                || "created".equalsIgnoreCase(status);
     }
 
     private Long extrairFaturaId(String externalRef) {
@@ -255,24 +258,13 @@ public class PortalService {
         JsonNode payment = order.path("transactions").path("payments").path(0);
         String paymentId = payment.path("id").asText(null);
 
-        // qr_code pode aparecer em varios caminhos dependendo da versao da API
-        JsonNode pd = payment.path("payment_data");
-        if (pd.isMissingNode() || pd.isNull()) pd = payment.path("extended_info");
-        if (pd.isMissingNode() || pd.isNull()) pd = payment.path("method_result")
-                .path("point_of_interaction").path("transaction_data");
-
-        String qrCode = firstNonEmpty(
-                pd.path("qr_code").asText(null),
-                payment.path("qr_code").asText(null));
-        String qrCodeBase64 = firstNonEmpty(
-                pd.path("qr_code_base64").asText(null),
-                payment.path("qr_code_base64").asText(null));
-        String ticketUrl = firstNonEmpty(
-                pd.path("ticket_url").asText(null),
-                payment.path("ticket_url").asText(null));
+        // No Orders API, o qr_code fica DENTRO de payment_method (nao em payment_data)
+        JsonNode pm = payment.path("payment_method");
+        String qrCode = pm.path("qr_code").asText(null);
+        String qrCodeBase64 = pm.path("qr_code_base64").asText(null);
+        String ticketUrl = pm.path("ticket_url").asText(null);
 
         LocalDateTime expiracao = parseIso(firstNonEmpty(
-                pd.path("expiration_date").asText(null),
                 payment.path("expiration_time").asText(null),
                 order.path("expiration_time").asText(null)));
 

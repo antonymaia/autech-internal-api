@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpStatusCodeException;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
 
 import javax.annotation.PostConstruct;
@@ -76,8 +77,6 @@ public class MercadoPagoService {
         }
 
         String email = validarEmailOuFallback(emailCliente);
-        String cnpjCpfLimpo = cnpjCpf == null ? "" : cnpjCpf.replaceAll("\\D", "");
-        String tipoDoc = cnpjCpfLimpo.length() == 14 ? "CNPJ" : "CPF";
         String valorStr = valor.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString();
 
         ObjectNode body = objectMapper.createObjectNode();
@@ -85,7 +84,6 @@ public class MercadoPagoService {
         body.put("total_amount", valorStr);
         body.put("external_reference", "fatura-" + faturaId);
         body.put("processing_mode", "automatic");
-        body.put("capture_mode", "automatic_async");
 
         ObjectNode transactions = body.putObject("transactions");
         ArrayNode payments = transactions.putArray("payments");
@@ -97,15 +95,20 @@ public class MercadoPagoService {
 
         ObjectNode payer = body.putObject("payer");
         payer.put("email", email);
-        payer.put("first_name", nomeCliente != null ? nomeCliente : "Cliente");
-        ObjectNode identification = payer.putObject("identification");
-        identification.put("type", tipoDoc);
-        identification.put("number", cnpjCpfLimpo);
+        // Em sandbox (token TEST-), "APRO" dispara auto-aprovacao do PIX pelo MP,
+        // util pra testar o webhook end-to-end sem precisar de comprador de teste.
+        boolean isSandbox = accessToken != null && accessToken.startsWith("TEST-");
+        if (isSandbox) {
+            payer.put("first_name", "APRO");
+        } else if (nomeCliente != null && !nomeCliente.isBlank()) {
+            payer.put("first_name", nomeCliente);
+        }
 
         HttpHeaders headers = cabecalhosAutenticados();
         headers.set("X-Idempotency-Key", UUID.randomUUID().toString());
 
         try {
+            log.info("[MercadoPago] Enviando POST /v1/orders — fatura={}, body={}", faturaId, body);
             ResponseEntity<JsonNode> resp = restTemplate.exchange(
                     BASE_URL + "/v1/orders",
                     HttpMethod.POST,
@@ -113,11 +116,17 @@ public class MercadoPagoService {
                     JsonNode.class);
             log.info("[MercadoPago] Order PIX criada — fatura={}, http={}", faturaId, resp.getStatusCodeValue());
             return resp.getBody();
-        } catch (HttpStatusCodeException e) {
-            log.error("[MercadoPago] Falha ao criar Order PIX fatura {} (http {}): {}",
-                    faturaId, e.getStatusCode().value(), e.getResponseBodyAsString(), e);
-            throw new RuntimeException("Mercado Pago recusou a criacao da order: "
+        } catch (RestClientResponseException e) {
+            log.error("[MercadoPago] Falha ao criar Order PIX fatura {} (http {} - {}): headers={} body={}",
+                    faturaId, e.getRawStatusCode(), e.getStatusText(),
+                    e.getResponseHeaders(), e.getResponseBodyAsString(), e);
+            throw new RuntimeException("Mercado Pago recusou (http " + e.getRawStatusCode() + "): "
                     + e.getResponseBodyAsString());
+        } catch (Exception e) {
+            log.error("[MercadoPago] Erro inesperado criando Order PIX fatura {} — tipo={}, msg={}",
+                    faturaId, e.getClass().getName(), e.getMessage(), e);
+            throw new RuntimeException("Erro ao chamar Mercado Pago: " + e.getClass().getSimpleName()
+                    + " - " + e.getMessage());
         }
     }
 
