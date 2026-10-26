@@ -41,57 +41,64 @@ public class PortalController {
     /**
      * Webhook do Mercado Pago. Chamado pelo MP automaticamente.
      *
-     * O MP suporta 2 formatos:
-     *  1) query-string legado: ?topic=payment&id=123
-     *  2) JSON body:  {"action":"payment.updated","data":{"id":"123"},...}
+     * Formatos aceitos:
+     *  1) query-string legado: ?topic=payment&id=123  OU  ?topic=merchant_order&id=...
+     *  2) JSON body:  {"type":"...","action":"...","data":{"id":"..."},...}
      *
-     * Aceitamos ambos e sempre retornamos 200 pra MP nao re-tentar infinito.
-     * Em caso de assinatura invalida, loga e ignora.
+     * Aceitamos id como order_id (Orders API) OU payment_id (legacy).
+     * Sempre retorna 200 pra MP nao re-tentar infinito.
      */
     @PostMapping("/webhook/mercadopago")
     public ResponseEntity<Void> webhookMercadoPago(
             @RequestBody(required = false) JsonNode body,
             @RequestParam(name = "id", required = false) String idQuery,
             @RequestParam(name = "topic", required = false) String topicQuery,
+            @RequestParam(name = "type", required = false) String typeQuery,
             @RequestHeader(name = "x-signature", required = false) String xSignature,
             @RequestHeader(name = "x-request-id", required = false) String xRequestId) {
 
-        String paymentId = extrairPaymentId(body, idQuery, topicQuery);
-        if (paymentId == null) {
-            log.warn("[Portal/Webhook] Payload sem payment_id — ignorando");
+        String recursoId = extrairId(body, idQuery);
+        String topic = extrairTopic(body, topicQuery, typeQuery);
+
+        if (recursoId == null) {
+            log.warn("[Portal/Webhook] Payload sem id — ignorando");
             return ResponseEntity.ok().build();
         }
 
-        if (!mercadoPagoService.validarAssinaturaWebhook(xSignature, xRequestId, paymentId)) {
-            log.warn("[Portal/Webhook] Assinatura invalida pro pagamento {} — ignorando (header x-signature='{}')",
-                    paymentId, xSignature);
+        if (!mercadoPagoService.validarAssinaturaWebhook(xSignature, xRequestId, recursoId)) {
+            log.warn("[Portal/Webhook] Assinatura invalida pro id {} — ignorando (header x-signature='{}')",
+                    recursoId, xSignature);
             return ResponseEntity.ok().build();
         }
 
-        portalService.processarWebhook(paymentId);
+        portalService.processarWebhook(recursoId, topic);
         return ResponseEntity.ok().build();
     }
 
-    /** Extrai o payment_id do body JSON ou dos query params. */
-    private String extrairPaymentId(JsonNode body, String idQuery, String topicQuery) {
+    private String extrairId(JsonNode body, String idQuery) {
         if (body != null) {
-            JsonNode data = body.path("data");
-            JsonNode idNode = data.path("id");
-            if (!idNode.isMissingNode() && !idNode.isNull()) {
-                return idNode.asText();
-            }
+            JsonNode idNode = body.path("data").path("id");
+            if (!idNode.isMissingNode() && !idNode.isNull()) return idNode.asText();
+
             JsonNode resource = body.path("resource");
             if (!resource.isMissingNode() && !resource.isNull()) {
                 String r = resource.asText();
                 int slash = r.lastIndexOf('/');
-                if (slash >= 0 && slash < r.length() - 1) return r.substring(slash + 1);
-                return r;
+                return slash >= 0 && slash < r.length() - 1 ? r.substring(slash + 1) : r;
             }
         }
-        if (idQuery != null && !idQuery.isBlank()
-                && (topicQuery == null || "payment".equalsIgnoreCase(topicQuery))) {
-            return idQuery;
+        return (idQuery != null && !idQuery.isBlank()) ? idQuery : null;
+    }
+
+    private String extrairTopic(JsonNode body, String topicQuery, String typeQuery) {
+        if (body != null) {
+            String t = body.path("type").asText(null);
+            if (t != null && !t.isBlank()) return t;
+            t = body.path("topic").asText(null);
+            if (t != null && !t.isBlank()) return t;
         }
+        if (typeQuery != null && !typeQuery.isBlank()) return typeQuery;
+        if (topicQuery != null && !topicQuery.isBlank()) return topicQuery;
         return null;
     }
 }

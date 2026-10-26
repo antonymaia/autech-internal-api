@@ -1,32 +1,34 @@
 package br.autech.springrestapi.service;
 
-import com.mercadopago.MercadoPagoConfig;
-import com.mercadopago.client.common.IdentificationRequest;
-import com.mercadopago.client.payment.PaymentClient;
-import com.mercadopago.client.payment.PaymentCreateRequest;
-import com.mercadopago.client.payment.PaymentPayerRequest;
-import com.mercadopago.exceptions.MPApiException;
-import com.mercadopago.exceptions.MPException;
-import com.mercadopago.resources.payment.Payment;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.*;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpStatusCodeException;
+import org.springframework.web.client.RestTemplate;
 
 import javax.annotation.PostConstruct;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.util.UUID;
 import java.util.regex.Pattern;
 
 /**
- * Wrapper em volta do SDK oficial do Mercado Pago.
- * Isola o uso do SDK pra facilitar troca/mock no futuro.
+ * Integra com o Mercado Pago via <b>Orders API (Checkout Transparente)</b>.
+ * Nao usa o SDK Java oficial porque, ate a versao 2.1.17, ele so suporta a
+ * Payments API (legacy). Chamadas HTTP sao feitas via RestTemplate direto.
  */
 @Slf4j
 @Service
 public class MercadoPagoService {
 
+    private static final String BASE_URL = "https://api.mercadopago.com";
     private static final Pattern EMAIL_REGEX =
             Pattern.compile("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$");
     private static final String EMAIL_FALLBACK = "pagamentos@autech.net.br";
@@ -40,14 +42,16 @@ public class MercadoPagoService {
     @Value("${mercadopago.webhook-url:}")
     private String webhookUrl;
 
+    private final RestTemplate restTemplate = new RestTemplate();
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
     @PostConstruct
     public void init() {
-        if (accessToken == null || accessToken.isBlank()) {
+        if (!isConfigurado()) {
             log.warn("[MercadoPago] access-token nao configurado. Pagamentos PIX nao vao funcionar ate configurar.");
             return;
         }
-        MercadoPagoConfig.setAccessToken(accessToken);
-        log.info("[MercadoPago] SDK configurado. Webhook URL: {}", webhookUrl);
+        log.info("[MercadoPago] Orders API em {} — webhook: {}", BASE_URL, webhookUrl);
     }
 
     public boolean isConfigurado() {
@@ -55,77 +59,113 @@ public class MercadoPagoService {
     }
 
     /**
-     * Cria um pagamento PIX no Mercado Pago.
+     * Cria uma Order PIX no Mercado Pago. Retorna o JSON cru da order,
+     * de onde o chamador extrai orderId, qr_code, qr_code_base64 etc.
      *
-     * @param faturaId         id da fatura (vai como external_reference pra rastrear no webhook)
-     * @param valor            valor da fatura
-     * @param cnpjCpf          CPF/CNPJ do pagador (vai pro MP, nao expoe no portal)
-     * @param nomeCliente      nome do cliente (vai pro MP)
-     * @param emailCliente     email do cliente (MP exige; se nao tiver, usar fallback)
-     * @return Payment do SDK com os dados do PIX (qr_code, qr_code_base64, ticket_url)
+     * @param faturaId      id da fatura (vai como external_reference)
+     * @param valor         valor da fatura
+     * @param cnpjCpf       documento do pagador (so digitos)
+     * @param nomeCliente   nome do pagador
+     * @param emailCliente  email do pagador (fallback se invalido)
      */
-    public Payment criarPagamentoPix(Long faturaId, BigDecimal valor,
-                                     String cnpjCpf, String nomeCliente,
-                                     String emailCliente) throws MPException, MPApiException {
+    public JsonNode criarOrderPix(Long faturaId, BigDecimal valor,
+                                  String cnpjCpf, String nomeCliente,
+                                  String emailCliente) {
         if (!isConfigurado()) {
-            throw new MPException("Mercado Pago nao configurado (access-token ausente)");
+            throw new IllegalStateException("Mercado Pago nao configurado (access-token ausente)");
         }
 
         String email = validarEmailOuFallback(emailCliente);
         String cnpjCpfLimpo = cnpjCpf == null ? "" : cnpjCpf.replaceAll("\\D", "");
         String tipoDoc = cnpjCpfLimpo.length() == 14 ? "CNPJ" : "CPF";
+        String valorStr = valor.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString();
 
-        PaymentPayerRequest payer = PaymentPayerRequest.builder()
-                .email(email)
-                .firstName(nomeCliente != null ? nomeCliente : "Cliente")
-                .identification(IdentificationRequest.builder()
-                        .type(tipoDoc)
-                        .number(cnpjCpfLimpo)
-                        .build())
-                .build();
+        ObjectNode body = objectMapper.createObjectNode();
+        body.put("type", "online");
+        body.put("total_amount", valorStr);
+        body.put("external_reference", "fatura-" + faturaId);
+        body.put("processing_mode", "automatic");
+        body.put("capture_mode", "automatic_async");
 
-        PaymentCreateRequest req = PaymentCreateRequest.builder()
-                .transactionAmount(valor)
-                .description("Fatura #" + faturaId + " - Autech")
-                .paymentMethodId("pix")
-                .externalReference(faturaId.toString())
-                .notificationUrl(webhookUrl)
-                .payer(payer)
-                .build();
+        ObjectNode transactions = body.putObject("transactions");
+        ArrayNode payments = transactions.putArray("payments");
+        ObjectNode payment = payments.addObject();
+        payment.put("amount", valorStr);
+        ObjectNode paymentMethod = payment.putObject("payment_method");
+        paymentMethod.put("id", "pix");
+        paymentMethod.put("type", "bank_transfer");
 
-        PaymentClient client = new PaymentClient();
-        return client.create(req);
+        ObjectNode payer = body.putObject("payer");
+        payer.put("email", email);
+        payer.put("first_name", nomeCliente != null ? nomeCliente : "Cliente");
+        ObjectNode identification = payer.putObject("identification");
+        identification.put("type", tipoDoc);
+        identification.put("number", cnpjCpfLimpo);
+
+        HttpHeaders headers = cabecalhosAutenticados();
+        headers.set("X-Idempotency-Key", UUID.randomUUID().toString());
+
+        try {
+            ResponseEntity<JsonNode> resp = restTemplate.exchange(
+                    BASE_URL + "/v1/orders",
+                    HttpMethod.POST,
+                    new HttpEntity<>(body, headers),
+                    JsonNode.class);
+            log.info("[MercadoPago] Order PIX criada — fatura={}, http={}", faturaId, resp.getStatusCodeValue());
+            return resp.getBody();
+        } catch (HttpStatusCodeException e) {
+            log.error("[MercadoPago] Falha ao criar Order PIX fatura {} (http {}): {}",
+                    faturaId, e.getStatusCode().value(), e.getResponseBodyAsString(), e);
+            throw new RuntimeException("Mercado Pago recusou a criacao da order: "
+                    + e.getResponseBodyAsString());
+        }
+    }
+
+    /** Consulta uma Order pelo ID. Retorna o JSON cru. */
+    public JsonNode buscarOrder(String orderId) {
+        if (!isConfigurado()) {
+            throw new IllegalStateException("Mercado Pago nao configurado");
+        }
+        try {
+            ResponseEntity<JsonNode> resp = restTemplate.exchange(
+                    BASE_URL + "/v1/orders/" + orderId,
+                    HttpMethod.GET,
+                    new HttpEntity<>(cabecalhosAutenticados()),
+                    JsonNode.class);
+            return resp.getBody();
+        } catch (HttpStatusCodeException e) {
+            log.error("[MercadoPago] Falha ao buscar order {} (http {}): {}",
+                    orderId, e.getStatusCode().value(), e.getResponseBodyAsString(), e);
+            return null;
+        }
     }
 
     /**
-     * Retorna o email informado se tiver formato valido; caso contrario usa o fallback.
-     * Mercado Pago valida o formato do email no payer e recusa pagamento se invalido.
+     * Consulta um pagamento legado (Payments API) — usado quando o webhook
+     * notifica sobre payment_id vindo de orders antigas (compatibilidade).
      */
-    private String validarEmailOuFallback(String email) {
-        if (email == null || email.isBlank()) return EMAIL_FALLBACK;
-        String trim = email.trim();
-        if (!EMAIL_REGEX.matcher(trim).matches()) {
-            log.warn("[MercadoPago] Email '{}' invalido no cadastro — usando fallback {}", trim, EMAIL_FALLBACK);
-            return EMAIL_FALLBACK;
+    public JsonNode buscarPayment(String paymentId) {
+        if (!isConfigurado()) {
+            throw new IllegalStateException("Mercado Pago nao configurado");
         }
-        return trim;
-    }
-
-    /** Busca um pagamento no Mercado Pago pelo ID. */
-    public Payment buscarPagamento(String paymentId) throws MPException, MPApiException {
-        PaymentClient client = new PaymentClient();
-        return client.get(Long.parseLong(paymentId));
+        try {
+            ResponseEntity<JsonNode> resp = restTemplate.exchange(
+                    BASE_URL + "/v1/payments/" + paymentId,
+                    HttpMethod.GET,
+                    new HttpEntity<>(cabecalhosAutenticados()),
+                    JsonNode.class);
+            return resp.getBody();
+        } catch (HttpStatusCodeException e) {
+            log.error("[MercadoPago] Falha ao buscar payment {} (http {}): {}",
+                    paymentId, e.getStatusCode().value(), e.getResponseBodyAsString(), e);
+            return null;
+        }
     }
 
     /**
      * Valida a assinatura HMAC-SHA256 do webhook do Mercado Pago.
-     * O header x-signature vem no formato: "ts=1234567890,v1=abc123def..."
-     * Template de validacao: id:{data_id};request-id:{request_id};ts:{ts};
-     *
-     * @param xSignature  valor do header "x-signature"
-     * @param xRequestId  valor do header "x-request-id"
-     * @param dataId      ID do recurso (geralmente o payment id vindo no query string)
-     * @return true se a assinatura for valida
+     * Formato do header x-signature: "ts=1234567890,v1=abc123..."
+     * Template: id:{data_id};request-id:{request_id};ts:{ts};
      */
     public boolean validarAssinaturaWebhook(String xSignature, String xRequestId, String dataId) {
         if (webhookSecret == null || webhookSecret.isBlank()) {
@@ -163,5 +203,25 @@ public class MercadoPagoService {
             log.error("[MercadoPago] Erro validando assinatura webhook: {}", e.getMessage(), e);
             return false;
         }
+    }
+
+    // ---------- helpers ----------
+
+    private HttpHeaders cabecalhosAutenticados() {
+        HttpHeaders h = new HttpHeaders();
+        h.setBearerAuth(accessToken);
+        h.setContentType(MediaType.APPLICATION_JSON);
+        h.setAccept(java.util.List.of(MediaType.APPLICATION_JSON));
+        return h;
+    }
+
+    private String validarEmailOuFallback(String email) {
+        if (email == null || email.isBlank()) return EMAIL_FALLBACK;
+        String trim = email.trim();
+        if (!EMAIL_REGEX.matcher(trim).matches()) {
+            log.warn("[MercadoPago] Email '{}' invalido no cadastro — usando fallback {}", trim, EMAIL_FALLBACK);
+            return EMAIL_FALLBACK;
+        }
+        return trim;
     }
 }

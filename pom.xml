@@ -94,13 +94,6 @@
 			<version>5.2.8.RELEASE</version>
 		</dependency>
 
-		<!-- Mercado Pago SDK -->
-		<dependency>
-			<groupId>com.mercadopago</groupId>
-			<artifactId>sdk-java</artifactId>
-			<version>2.1.17</version>
-		</dependency>
-
 	</dependencies>
 
 	<build>

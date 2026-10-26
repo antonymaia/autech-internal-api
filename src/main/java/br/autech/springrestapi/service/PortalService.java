@@ -11,9 +11,7 @@ import br.autech.springrestapi.repository.PagamentoFaturaRepository;
 import br.autech.springrestapi.repository.PagamentoRepository;
 import br.autech.springrestapi.service.exception.BadRequestException;
 import br.autech.springrestapi.service.exception.ObjectNotFoundException;
-import com.mercadopago.exceptions.MPApiException;
-import com.mercadopago.exceptions.MPException;
-import com.mercadopago.resources.payment.Payment;
+import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -21,13 +19,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Orquestracao do portal publico do cliente.
- * Expoe apenas os dados autorizados (nome + razao social + faturas sem dados sensiveis).
+ * Orquestracao do portal publico — usa Orders API do Mercado Pago.
  */
 @Slf4j
 @Service
@@ -40,10 +38,6 @@ public class PortalService {
     private final PagamentoFaturaRepository pagamentoFaturaRepository;
     private final MercadoPagoService mercadoPagoService;
 
-    /**
-     * "Login" do portal: dado o CPF/CNPJ, retorna nome + lista de faturas.
-     * Nao retorna endereco, telefone nem email.
-     */
     @Transactional(readOnly = true)
     public ClientePortalDTO buscarDadosCliente(String cnpjCpf) {
         Cliente cliente = clienteService.findByCnpjCpf(cnpjCpf);
@@ -56,9 +50,9 @@ public class PortalService {
     }
 
     /**
-     * Cria (ou reaproveita) um pagamento PIX no Mercado Pago pra fatura informada.
-     * Idempotente: se ja existe um mpPaymentId na fatura e ele nao esta pago/cancelado,
-     * retorna o mesmo QR em vez de criar outro.
+     * Cria (ou reaproveita) uma Order PIX no Mercado Pago para a fatura.
+     * Idempotente: se ja existe mpOrderId na fatura e ela ainda esta pending,
+     * reaproveita a mesma order em vez de criar outra.
      */
     @Transactional
     public PagamentoPixResponse gerarPagamentoPix(Long faturaId) {
@@ -70,122 +64,224 @@ public class PortalService {
         }
 
         try {
-            if (fatura.getMpPaymentId() != null && !fatura.getMpPaymentId().isBlank()) {
-                Payment existente = mercadoPagoService.buscarPagamento(fatura.getMpPaymentId());
-                if (existente != null && isPagamentoReaproveitavel(existente.getStatus())) {
-                    return toPagamentoPixResponse(existente);
+            if (fatura.getMpOrderId() != null && !fatura.getMpOrderId().isBlank()) {
+                JsonNode orderExistente = mercadoPagoService.buscarOrder(fatura.getMpOrderId());
+                if (orderExistente != null && isOrderReaproveitavel(orderExistente.path("status").asText())) {
+                    return toPagamentoPixResponse(orderExistente);
                 }
             }
 
             Cliente cliente = fatura.getCliente();
-            Payment novo = mercadoPagoService.criarPagamentoPix(
+            JsonNode novaOrder = mercadoPagoService.criarOrderPix(
                     fatura.getId(),
                     fatura.getValor(),
                     cliente.getCnpjCpf(),
                     resolverRazaoSocial(cliente),
                     cliente.getEmail());
 
-            fatura.setMpPaymentId(String.valueOf(novo.getId()));
+            String orderId = novaOrder.path("id").asText(null);
+            if (orderId == null) {
+                throw new BadRequestException("Resposta do Mercado Pago sem id da order");
+            }
+            fatura.setMpOrderId(orderId);
             faturaRepository.save(fatura);
 
-            log.info("[Portal] PIX criado — fatura={}, mp_payment_id={}, valor={}",
-                    fatura.getId(), novo.getId(), fatura.getValor());
+            log.info("[Portal] Order PIX criada — fatura={}, mp_order_id={}, valor={}",
+                    fatura.getId(), orderId, fatura.getValor());
 
-            return toPagamentoPixResponse(novo);
-        } catch (MPApiException e) {
-            String body = e.getApiResponse() != null ? e.getApiResponse().getContent() : "(sem body)";
-            int status = e.getApiResponse() != null ? e.getApiResponse().getStatusCode() : 0;
-            log.error("[Portal] MP recusou pagamento da fatura {} (http {}): {} | body={}",
-                    faturaId, status, e.getMessage(), body, e);
-            throw new BadRequestException("Erro ao gerar pagamento PIX. Tente novamente em instantes.");
-        } catch (MPException e) {
-            log.error("[Portal] Erro MP (geral) para fatura {}: {}", faturaId, e.getMessage(), e);
+            return toPagamentoPixResponse(novaOrder);
+        } catch (BadRequestException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("[Portal] Erro ao gerar PIX pra fatura {}: {}", faturaId, e.getMessage(), e);
             throw new BadRequestException("Erro ao gerar pagamento PIX. Tente novamente em instantes.");
         }
     }
 
     /**
-     * Processa a notificacao do Mercado Pago. Idempotente — pode ser chamada
-     * varias vezes com o mesmo payment_id sem efeitos colaterais.
-     *
-     * @param paymentId   id do pagamento no MP (vindo do payload do webhook)
-     * @return true se marcou a fatura como PAGA, false se nao houve mudanca
+     * Processa a notificacao do Mercado Pago. Idempotente.
+     * Aceita o id como order_id OU payment_id (compat com faturas antigas).
      */
     @Transactional
-    public boolean processarWebhook(String paymentId) {
-        if (paymentId == null || paymentId.isBlank()) {
-            log.warn("[Portal/Webhook] payment_id ausente — ignorando");
+    public boolean processarWebhook(String id, String topic) {
+        if (id == null || id.isBlank()) {
+            log.warn("[Portal/Webhook] id ausente — ignorando");
             return false;
         }
 
-        try {
-            Payment pagamentoMp = mercadoPagoService.buscarPagamento(paymentId);
-            if (pagamentoMp == null) {
-                log.warn("[Portal/Webhook] Pagamento {} nao encontrado no MP", paymentId);
-                return false;
+        boolean tentarComoOrder = topic == null || topic.isBlank()
+                || topic.toLowerCase().contains("order");
+        boolean tentarComoPayment = topic == null || topic.isBlank()
+                || "payment".equalsIgnoreCase(topic);
+
+        if (tentarComoOrder) {
+            JsonNode order = mercadoPagoService.buscarOrder(id);
+            if (order != null && !order.isMissingNode() && !order.path("id").isMissingNode()) {
+                return processarOrder(order);
             }
+        }
 
-            if (!"approved".equalsIgnoreCase(pagamentoMp.getStatus())) {
-                log.info("[Portal/Webhook] Pagamento {} em status '{}' — nenhuma acao",
-                        paymentId, pagamentoMp.getStatus());
-                return false;
+        if (tentarComoPayment) {
+            JsonNode payment = mercadoPagoService.buscarPayment(id);
+            if (payment != null && !payment.isMissingNode() && !payment.path("id").isMissingNode()) {
+                return processarPaymentLegacy(payment);
             }
+        }
 
-            String externalRef = pagamentoMp.getExternalReference();
-            if (externalRef == null || externalRef.isBlank()) {
-                log.warn("[Portal/Webhook] Pagamento {} sem external_reference — nao da pra identificar fatura", paymentId);
-                return false;
-            }
+        log.warn("[Portal/Webhook] Nao encontrou order nem payment com id {}", id);
+        return false;
+    }
 
-            Long faturaId;
-            try {
-                faturaId = Long.parseLong(externalRef);
-            } catch (NumberFormatException e) {
-                log.warn("[Portal/Webhook] external_reference invalido '{}' no pagamento {}", externalRef, paymentId);
-                return false;
-            }
+    private boolean processarOrder(JsonNode order) {
+        String orderId = order.path("id").asText();
+        String status = order.path("status").asText();
 
-            Fatura fatura = faturaRepository.findById(faturaId).orElse(null);
-            if (fatura == null) {
-                log.warn("[Portal/Webhook] Fatura {} nao encontrada (external_reference do pagamento {})",
-                        faturaId, paymentId);
-                return false;
-            }
-
-            if (fatura.getEstado() == EstadoFatura.PAGA) {
-                log.info("[Portal/Webhook] Fatura {} ja esta paga — ignorando duplicata do webhook", faturaId);
-                return false;
-            }
-
-            PagamentoPix pagamentoPix = new PagamentoPix();
-            pagamentoPix.setValorPagamento(pagamentoMp.getTransactionAmount() != null
-                    ? pagamentoMp.getTransactionAmount()
-                    : fatura.getValor());
-            pagamentoPix.setCreatedAt(LocalDateTime.now());
-            Pagamento pagSalvo = pagamentoRepository.save(pagamentoPix);
-
-            PagamentoFaturaId pagamentoFaturaId = new PagamentoFaturaId(pagSalvo, fatura);
-            PagamentoFatura pagamentoFatura = new PagamentoFatura(pagamentoFaturaId);
-            fatura.getPagamentos().add(pagamentoFaturaRepository.save(pagamentoFatura));
-
-            fatura.setEstado(EstadoFatura.PAGA);
-            fatura.setDataPagamento(LocalDateTime.now(ZoneId.of("America/Sao_Paulo")));
-            fatura.setMpPaymentId(String.valueOf(pagamentoMp.getId()));
-            faturaRepository.save(fatura);
-
-            log.info("[Portal/Webhook] Fatura {} marcada como PAGA — pagamento MP {}, valor {}",
-                    faturaId, pagamentoMp.getId(), pagamentoMp.getTransactionAmount());
-            return true;
-        } catch (MPException | MPApiException e) {
-            log.error("[Portal/Webhook] Erro consultando pagamento {} no MP: {}", paymentId, e.getMessage(), e);
+        if (!"processed".equalsIgnoreCase(status)) {
+            log.info("[Portal/Webhook] Order {} em status '{}' — nenhuma acao", orderId, status);
             return false;
         }
+
+        Long faturaId = extrairFaturaId(order.path("external_reference").asText(null));
+        if (faturaId == null) {
+            log.warn("[Portal/Webhook] external_reference invalido na order {}: '{}'",
+                    orderId, order.path("external_reference").asText(null));
+            return false;
+        }
+
+        Fatura fatura = faturaRepository.findById(faturaId).orElse(null);
+        if (fatura == null) {
+            log.warn("[Portal/Webhook] Fatura {} nao encontrada (order {})", faturaId, orderId);
+            return false;
+        }
+        if (fatura.getEstado() == EstadoFatura.PAGA) {
+            log.info("[Portal/Webhook] Fatura {} ja esta paga — ignorando duplicata", faturaId);
+            return false;
+        }
+
+        BigDecimal valor = toBigDecimal(order.path("total_amount").asText(null));
+        if (valor == null) valor = fatura.getValor();
+
+        marcarFaturaPaga(fatura, orderId, null, valor);
+        log.info("[Portal/Webhook] Fatura {} marcada como PAGA via order {}", faturaId, orderId);
+        return true;
+    }
+
+    /** Compat com faturas criadas antes da migracao pra Orders API. */
+    private boolean processarPaymentLegacy(JsonNode payment) {
+        String paymentId = payment.path("id").asText();
+        String status = payment.path("status").asText();
+
+        if (!"approved".equalsIgnoreCase(status)) {
+            log.info("[Portal/Webhook] Payment legacy {} em status '{}' — nenhuma acao", paymentId, status);
+            return false;
+        }
+
+        Long faturaId = extrairFaturaId(payment.path("external_reference").asText(null));
+        if (faturaId == null) {
+            log.warn("[Portal/Webhook] external_reference invalido no payment {}", paymentId);
+            return false;
+        }
+
+        Fatura fatura = faturaRepository.findById(faturaId).orElse(null);
+        if (fatura == null || fatura.getEstado() == EstadoFatura.PAGA) return false;
+
+        BigDecimal valor = toBigDecimal(payment.path("transaction_amount").asText(null));
+        if (valor == null) valor = fatura.getValor();
+
+        marcarFaturaPaga(fatura, null, paymentId, valor);
+        log.info("[Portal/Webhook] Fatura {} marcada PAGA via payment legacy {}", faturaId, paymentId);
+        return true;
+    }
+
+    private void marcarFaturaPaga(Fatura fatura, String orderId, String paymentId, BigDecimal valor) {
+        PagamentoPix pagamentoPix = new PagamentoPix();
+        pagamentoPix.setValorPagamento(valor);
+        pagamentoPix.setCreatedAt(LocalDateTime.now());
+        Pagamento pagSalvo = pagamentoRepository.save(pagamentoPix);
+
+        PagamentoFaturaId pfId = new PagamentoFaturaId(pagSalvo, fatura);
+        PagamentoFatura pagamentoFatura = new PagamentoFatura(pfId);
+        fatura.getPagamentos().add(pagamentoFaturaRepository.save(pagamentoFatura));
+
+        fatura.setEstado(EstadoFatura.PAGA);
+        fatura.setDataPagamento(LocalDateTime.now(ZoneId.of("America/Sao_Paulo")));
+        if (orderId != null) fatura.setMpOrderId(orderId);
+        if (paymentId != null) fatura.setMpPaymentId(paymentId);
+        faturaRepository.save(fatura);
     }
 
     // ---------- helpers ----------
 
-    private boolean isPagamentoReaproveitavel(String status) {
-        return "pending".equalsIgnoreCase(status) || "in_process".equalsIgnoreCase(status);
+    private boolean isOrderReaproveitavel(String status) {
+        return "pending".equalsIgnoreCase(status) || "created".equalsIgnoreCase(status);
+    }
+
+    private Long extrairFaturaId(String externalRef) {
+        if (externalRef == null || externalRef.isBlank()) return null;
+        String numero = externalRef.startsWith("fatura-") ? externalRef.substring(7) : externalRef;
+        try {
+            return Long.parseLong(numero);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private BigDecimal toBigDecimal(String s) {
+        if (s == null || s.isBlank()) return null;
+        try {
+            return new BigDecimal(s);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private LocalDateTime parseIso(String iso) {
+        if (iso == null || iso.isBlank()) return null;
+        try {
+            return OffsetDateTime.parse(iso).toLocalDateTime();
+        } catch (Exception e1) {
+            try {
+                return LocalDateTime.parse(iso);
+            } catch (Exception e2) {
+                return null;
+            }
+        }
+    }
+
+    private PagamentoPixResponse toPagamentoPixResponse(JsonNode order) {
+        String orderId = order.path("id").asText(null);
+        String status = order.path("status").asText(null);
+
+        JsonNode payment = order.path("transactions").path("payments").path(0);
+        String paymentId = payment.path("id").asText(null);
+
+        // qr_code pode aparecer em varios caminhos dependendo da versao da API
+        JsonNode pd = payment.path("payment_data");
+        if (pd.isMissingNode() || pd.isNull()) pd = payment.path("extended_info");
+        if (pd.isMissingNode() || pd.isNull()) pd = payment.path("method_result")
+                .path("point_of_interaction").path("transaction_data");
+
+        String qrCode = firstNonEmpty(
+                pd.path("qr_code").asText(null),
+                payment.path("qr_code").asText(null));
+        String qrCodeBase64 = firstNonEmpty(
+                pd.path("qr_code_base64").asText(null),
+                payment.path("qr_code_base64").asText(null));
+        String ticketUrl = firstNonEmpty(
+                pd.path("ticket_url").asText(null),
+                payment.path("ticket_url").asText(null));
+
+        LocalDateTime expiracao = parseIso(firstNonEmpty(
+                pd.path("expiration_date").asText(null),
+                payment.path("expiration_time").asText(null),
+                order.path("expiration_time").asText(null)));
+
+        return new PagamentoPixResponse(orderId, paymentId, qrCode, qrCodeBase64, ticketUrl, expiracao, status);
+    }
+
+    private String firstNonEmpty(String... values) {
+        for (String v : values) if (v != null && !v.isBlank()) return v;
+        return null;
     }
 
     private FaturaPortalDTO toFaturaDTO(Fatura f) {
@@ -203,28 +299,6 @@ public class PortalService {
                 f.getDataVencimento(),
                 f.getDataPagamento(),
                 itens);
-    }
-
-    private PagamentoPixResponse toPagamentoPixResponse(Payment p) {
-        String qrCode = null;
-        String qrCodeBase64 = null;
-        String ticketUrl = null;
-        if (p.getPointOfInteraction() != null
-                && p.getPointOfInteraction().getTransactionData() != null) {
-            qrCode = p.getPointOfInteraction().getTransactionData().getQrCode();
-            qrCodeBase64 = p.getPointOfInteraction().getTransactionData().getQrCodeBase64();
-            ticketUrl = p.getPointOfInteraction().getTransactionData().getTicketUrl();
-        }
-        LocalDateTime expiracao = p.getDateOfExpiration() != null
-                ? p.getDateOfExpiration().toLocalDateTime()
-                : null;
-        return new PagamentoPixResponse(
-                String.valueOf(p.getId()),
-                qrCode,
-                qrCodeBase64,
-                ticketUrl,
-                expiracao,
-                p.getStatus());
     }
 
     private String resolverRazaoSocial(Cliente cliente) {

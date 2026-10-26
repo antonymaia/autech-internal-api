@@ -52,6 +52,10 @@ public class Fatura {
     @Column(name = "MP_PAYMENT_ID")
     private String mpPaymentId;
 
+    @JsonIgnore
+    @Column(name = "MP_ORDER_ID")
+    private String mpOrderId;
+
     public Fatura(Long id, EstadoFatura estadoFatura, BigDecimal valor, LocalDate dataVencimento, LocalDateTime dataPagamento, LocalDateTime createdAt, Cliente cliente, Set<PagamentoFatura> pagamentos) {
         this.id = id;
         this.estado = estadoFatura.getCod();
