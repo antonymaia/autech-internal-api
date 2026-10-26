@@ -92,8 +92,14 @@ public class PortalService {
                     fatura.getId(), novo.getId(), fatura.getValor());
 
             return toPagamentoPixResponse(novo);
-        } catch (MPException | MPApiException e) {
-            log.error("[Portal] Erro no Mercado Pago para fatura {}: {}", faturaId, e.getMessage(), e);
+        } catch (MPApiException e) {
+            String body = e.getApiResponse() != null ? e.getApiResponse().getContent() : "(sem body)";
+            int status = e.getApiResponse() != null ? e.getApiResponse().getStatusCode() : 0;
+            log.error("[Portal] MP recusou pagamento da fatura {} (http {}): {} | body={}",
+                    faturaId, status, e.getMessage(), body, e);
+            throw new BadRequestException("Erro ao gerar pagamento PIX. Tente novamente em instantes.");
+        } catch (MPException e) {
+            log.error("[Portal] Erro MP (geral) para fatura {}: {}", faturaId, e.getMessage(), e);
             throw new BadRequestException("Erro ao gerar pagamento PIX. Tente novamente em instantes.");
         }
     }
