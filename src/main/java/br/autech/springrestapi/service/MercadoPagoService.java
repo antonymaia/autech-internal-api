@@ -204,31 +204,36 @@ public class MercadoPagoService {
             if (ts == null || v1 == null) return false;
 
             String secret = webhookSecret.trim();
-            String template = "id:" + dataId + ";"
+            // Mercado Pago usa o id em LOWERCASE no template HMAC — nao documentado mas confirmado empiricamente.
+            String idLower = dataId.toLowerCase();
+            String template = "id:" + idLower + ";"
                     + (xRequestId != null ? "request-id:" + xRequestId + ";" : "")
                     + "ts:" + ts + ";";
 
-            Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-            byte[] hash = mac.doFinal(template.getBytes(StandardCharsets.UTF_8));
-
-            StringBuilder hex = new StringBuilder();
-            for (byte b : hash) hex.append(String.format("%02x", b));
-            String calculado = hex.toString();
-
-            boolean ok = calculado.equalsIgnoreCase(v1);
-            if (!ok) {
-                String preview = secret.length() > 10
-                        ? secret.substring(0, 4) + "..." + secret.substring(secret.length() - 4)
-                        : "***";
-                log.warn("[MercadoPago] HMAC nao bate — template='{}', esperado='{}', recebido='{}', secretLen={}, secretPreview={}",
-                        template, calculado, v1, secret.length(), preview);
+            String calculado = hmacHex(template, secret);
+            if (calculado.equalsIgnoreCase(v1)) {
+                return true;
             }
-            return ok;
+
+            String preview = secret.length() > 10
+                    ? secret.substring(0, 4) + "..." + secret.substring(secret.length() - 4)
+                    : "***";
+            log.warn("[MercadoPago] HMAC nao bate — template='{}', esperado='{}', recebido='{}', secretPreview={}",
+                    template, calculado, v1, preview);
+            return false;
         } catch (Exception e) {
             log.error("[MercadoPago] Erro validando assinatura webhook: {}", e.getMessage(), e);
             return false;
         }
+    }
+
+    private String hmacHex(String data, String key) throws Exception {
+        Mac mac = Mac.getInstance("HmacSHA256");
+        mac.init(new SecretKeySpec(key.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+        byte[] hash = mac.doFinal(data.getBytes(StandardCharsets.UTF_8));
+        StringBuilder hex = new StringBuilder();
+        for (byte b : hash) hex.append(String.format("%02x", b));
+        return hex.toString();
     }
 
     // ---------- helpers ----------
