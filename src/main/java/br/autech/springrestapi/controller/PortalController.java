@@ -10,11 +10,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import javax.servlet.http.HttpServletRequest;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.Map;
-
 /**
  * Endpoints publicos usados pelo portal do cliente (pagar.autech.net.br).
  *
@@ -73,33 +68,21 @@ public class PortalController {
             @RequestParam(name = "topic", required = false) String topicQuery,
             @RequestParam(name = "type", required = false) String typeQuery,
             @RequestHeader(name = "x-signature", required = false) String xSignature,
-            @RequestHeader(name = "x-request-id", required = false) String xRequestId,
-            HttpServletRequest request) {
-
-        // Log forense completo pra investigar a assinatura HMAC
-        Map<String, String> headers = new LinkedHashMap<>();
-        Collections.list(request.getHeaderNames()).forEach(h -> headers.put(h, request.getHeader(h)));
-        log.info("[Portal/Webhook] REQUEST — url='{}', query='{}', headers={}, body={}",
-                request.getRequestURL(), request.getQueryString(), headers, body);
+            @RequestHeader(name = "x-request-id", required = false) String xRequestId) {
 
         String idFromBody = extrairIdDoBody(body);
         String idFromUrl = (dataIdQuery != null && !dataIdQuery.isBlank()) ? dataIdQuery : idQuery;
         String recursoId = idFromBody != null ? idFromBody : idFromUrl;
         String topic = extrairTopic(body, topicQuery, typeQuery);
 
-        log.info("[Portal/Webhook] IDs extraidos — idFromBody='{}', idFromUrl='{}', recursoId usado='{}', topic='{}'",
-                idFromBody, idFromUrl, recursoId, topic);
-
         if (recursoId == null) {
             log.warn("[Portal/Webhook] Payload sem id — ignorando");
             return ResponseEntity.ok().build();
         }
 
-        // Tenta validar HMAC primeiro com id do URL (padrao do MP), depois com id do body
         String idParaHmac = idFromUrl != null ? idFromUrl : recursoId;
         if (!mercadoPagoService.validarAssinaturaWebhook(xSignature, xRequestId, idParaHmac)) {
-            log.warn("[Portal/Webhook] Assinatura invalida pro id {} — ignorando (header x-signature='{}')",
-                    idParaHmac, xSignature);
+            log.warn("[Portal/Webhook] Assinatura invalida pro id {}", idParaHmac);
             return ResponseEntity.ok().build();
         }
 
