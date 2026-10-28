@@ -3,7 +3,8 @@ package br.autech.springrestapi.model.enums;
 public enum EstadoFatura {
     ABERTA(1, "Aberta"),
     PAGA(2, "Paga"),
-    VENCIDA(3, "Vencida");
+    VENCIDA(3, "Vencida"),
+    FECHADA(4, "Fechada");
 
     private int cod;
     private String descricao;

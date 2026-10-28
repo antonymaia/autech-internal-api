@@ -6,7 +6,6 @@ import lombok.Setter;
 
 import javax.persistence.*;
 import java.io.Serializable;
-import java.math.BigDecimal;
 
 @Getter
 @Setter
@@ -33,8 +32,6 @@ public class Cliente implements Serializable {
     private String numeroEndereco;
     @Column(name = "COMPLEMENTO_ENDERECO")
     private String complementoEndereco;
-    @Column(name = "VALOR_MENSALIDADE")
-    private BigDecimal valorMensalidade;
 
     @ManyToOne
     @JoinColumn(name = "COD_ENDERECO")
@@ -45,13 +42,12 @@ public class Cliente implements Serializable {
     private Assinatura assinatura;
 
     public Cliente() {}
-    public Cliente(String cnpjCpf, String nome, String razaoSocialNome, String nomeResponsavel, Endereco endereco, BigDecimal valorMensalidade, String complementoEndereco, String numeroEndereco, String bloqueado, String diaVencimento, String ativo, String email, String telefone) {
+    public Cliente(String cnpjCpf, String nome, String razaoSocialNome, String nomeResponsavel, Endereco endereco, String complementoEndereco, String numeroEndereco, String bloqueado, String diaVencimento, String ativo, String email, String telefone) {
         this.cnpjCpf = cnpjCpf;
         this.nome = nome;
         this.razaoSocialNome = razaoSocialNome;
         this.nomeResponsavel = nomeResponsavel;
         this.endereco = endereco;
-        this.valorMensalidade = valorMensalidade;
         this.complementoEndereco = complementoEndereco;
         this.numeroEndereco = numeroEndereco;
         this.bloqueado = bloqueado;

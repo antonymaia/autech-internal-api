@@ -5,7 +5,6 @@ import br.autech.springrestapi.dtos.GerarFaturaResponse;
 import br.autech.springrestapi.model.*;
 import br.autech.springrestapi.model.enums.EstadoFatura;
 import br.autech.springrestapi.model.enums.StatusAssinatura;
-import br.autech.springrestapi.repository.AssinaturaRepository;
 import br.autech.springrestapi.repository.ClienteRepository;
 import br.autech.springrestapi.repository.FaturaRepository;
 import br.autech.springrestapi.repository.PagamentoFaturaRepository;
@@ -35,14 +34,18 @@ import java.io.InputStreamReader;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 
@@ -54,16 +57,18 @@ public class FaturaService {
    private final FaturaRepository faturaRepository;
    private final ClienteService clienteService;
    private final ClienteRepository clienteRepository;
-   private final AssinaturaRepository assinaturaRepository;
    private final ResourceLoader resourceLoader;
    private final PagamentoFaturaRepository pagamentoFaturaRepository;
    private final PagamentoRepository pagamentoRepository;
    private final JavaMailSender mailSender;
    private final TemplateBuilder templateBuilder;
    private final Environment environment;
-   private final WhatsAppService whatsAppService;
    private final PlatformTransactionManager transactionManager;
 
+   public static final int DIAS_FECHAMENTO = 3;
+   public static final int DIAS_BLOQUEIO = 10;
+   private static final List<Integer> ESTADOS_PENDENTES =
+      List.of(EstadoFatura.FECHADA.getCod(), EstadoFatura.VENCIDA.getCod());
    private static final ZoneId BRASIL = ZoneId.of("America/Sao_Paulo");
    private static final DateTimeFormatter FORMATTER_BR = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
@@ -73,80 +78,164 @@ public class FaturaService {
       });
    }
 
-   public void gerarFaturas() {
-      LocalDate dataVencimento = LocalDate.now().plusDays(5);
-      int diaVencimentoBuscado = dataVencimento.getDayOfMonth();
+   /**
+    * Fecha as faturas que vencem daqui a DIAS_FECHAMENTO dias e, para cada fatura fechada,
+    * ja cria a fatura do proximo mes com os itens da assinatura atual (ABERTA).
+    *
+    * Tambem fecha faturas ABERTA com vencimento entre hoje e a data alvo que ficaram
+    * para tras (ex.: cron nao rodou). Se o cliente ainda nao tem fatura para a data alvo
+    * (cliente novo), ela e criada e fechada na hora.
+    *
+    * Retorna as faturas fechadas nesta execucao, para o envio do aviso de fechamento.
+    */
+   public List<Fatura> fecharFaturas() {
+      LocalDate hoje = LocalDate.now(BRASIL);
+      LocalDate dataAlvo = hoje.plusDays(DIAS_FECHAMENTO);
 
-      List<ClienteDTO> listaCliente = clienteService.buscarClientesAtivosPorDiaVencimento(diaVencimentoBuscado);
+      Set<String> clientes = new LinkedHashSet<>();
+      buscarClientesAtivosComVencimentoEm(dataAlvo).forEach(c -> clientes.add(c.getCnpjCpf()));
+      faturaRepository.findAllByEstadoAndDataVencimentoBetween(EstadoFatura.ABERTA.getCod(), hoje, dataAlvo)
+         .forEach(f -> clientes.add(f.getCliente().getCnpjCpf()));
 
-      log.info("[Gerar faturas] {} cliente(s) com dia_vencimento={}",
-         listaCliente.size(), diaVencimentoBuscado);
+      log.info("[Fechar faturas] {} cliente(s) com vencimento ate {}", clientes.size(), dataAlvo.format(FORMATTER_BR));
 
       TransactionTemplate tx = new TransactionTemplate(transactionManager);
-      int geradas = 0;
-      int jaExistia = 0;
-      int semAssinatura = 0;
-      int assinaturaNaoAtiva = 0;
-      int assinaturaSemProdutos = 0;
+      List<Fatura> fechadas = new ArrayList<>();
+      int proximasGeradas = 0;
+      Map<Razao, Integer> ignorados = new EnumMap<>(Razao.class);
 
-      for (ClienteDTO clienteDto : listaCliente) {
+      for (String cnpjCpf : clientes) {
          try {
-            ResultadoGeracao resultado = tx.execute(status -> processarCliente(clienteDto, dataVencimento));
-
+            ResultadoFechamento resultado = tx.execute(status -> processarFechamento(cnpjCpf, hoje, dataAlvo));
             if (resultado == null) continue;
-            switch (resultado.razao) {
-               case GERADA:               geradas++; break;
-               case JA_EXISTIA:           jaExistia++; break;
-               case SEM_ASSINATURA:       semAssinatura++; break;
-               case ASSINATURA_NAO_ATIVA: assinaturaNaoAtiva++; break;
-               case SEM_PRODUTOS:         assinaturaSemProdutos++; break;
+            if (resultado.razao != null) {
+               ignorados.merge(resultado.razao, 1, Integer::sum);
+               continue;
             }
+            fechadas.addAll(resultado.fechadas);
+            proximasGeradas += resultado.proximasGeradas;
          } catch (Exception e) {
-            log.error("[Gerar faturas] Erro no cliente {}: {}", clienteDto.getCnpjCpf(), e.getMessage(), e);
+            log.error("[Fechar faturas] Erro no cliente {}: {}", cnpjCpf, e.getMessage(), e);
          }
       }
-      log.info("[Gerar faturas] Concluido. Geradas={}, ja existia={}, sem assinatura={}, assinatura nao ativa={}, sem produtos={}",
-         geradas, jaExistia, semAssinatura, assinaturaNaoAtiva, assinaturaSemProdutos);
+
+      log.info("[Fechar faturas] Concluido. Fechadas={}, proximas geradas={}, ignorados={}",
+         fechadas.size(), proximasGeradas, ignorados);
+      return fechadas;
    }
 
-   private ResultadoGeracao processarCliente(ClienteDTO clienteDto, LocalDate dataVencimento) {
-      if (faturaRepository.existsByCliente_CnpjCpfAndDataVencimento(clienteDto.getCnpjCpf(), dataVencimento)) {
-         return new ResultadoGeracao(Razao.JA_EXISTIA, null, null);
+   private ResultadoFechamento processarFechamento(String cnpjCpf, LocalDate hoje, LocalDate dataAlvo) {
+      Cliente cliente = clienteService.findByCnpjCpf(cnpjCpf);
+      Razao inelegivel = verificarElegibilidade(cliente);
+      if (inelegivel != null) {
+         log.warn("[Fechar faturas] Cliente {} nao elegivel ({}). Nenhuma fatura fechada.", cnpjCpf, inelegivel);
+         return ResultadoFechamento.ignorado(inelegivel);
       }
 
-      Cliente cliente = clienteService.findByCnpjCpf(clienteDto.getCnpjCpf());
       Assinatura assinatura = cliente.getAssinatura();
-      if (assinatura == null) {
-         log.warn("[Gerar faturas] Cliente {} sem assinatura. Fatura nao gerada.", cliente.getCnpjCpf());
-         return new ResultadoGeracao(Razao.SEM_ASSINATURA, null, null);
-      }
-      if (assinatura.getStatus() != StatusAssinatura.ATIVA) {
-         return new ResultadoGeracao(Razao.ASSINATURA_NAO_ATIVA, null, null);
-      }
-      if (assinatura.getProdutos() == null || assinatura.getProdutos().isEmpty()) {
-         log.warn("[Gerar faturas] Cliente {} tem assinatura ATIVA sem produtos. Fatura nao gerada.",
-            cliente.getCnpjCpf());
-         return new ResultadoGeracao(Razao.SEM_PRODUTOS, null, null);
+      Integer dia = parseDiaVencimento(cliente.getDiaVencimento());
+
+      List<Fatura> aFechar = new ArrayList<>(faturaRepository.findAllByCliente_CnpjCpfAndEstadoAndDataVencimentoBetween(
+         cnpjCpf, EstadoFatura.ABERTA.getCod(), hoje, dataAlvo));
+
+      if (dia != null && dataAlvo.equals(vencimentoNoMes(YearMonth.from(dataAlvo), dia))
+         && !faturaRepository.existsByCliente_CnpjCpfAndDataVencimento(cnpjCpf, dataAlvo)) {
+         aFechar.add(montarFaturaComItens(cliente, assinatura, dataAlvo));
       }
 
-      Fatura fatura = montarFaturaComItens(cliente, assinatura, dataVencimento);
-      Fatura salva = faturaRepository.save(fatura);
-      return new ResultadoGeracao(Razao.GERADA, cliente, salva);
+      if (aFechar.isEmpty()) return ResultadoFechamento.ignorado(Razao.NADA_A_FECHAR);
+
+      List<Fatura> fechadas = new ArrayList<>();
+      int proximasGeradas = 0;
+      for (Fatura fatura : aFechar) {
+         fatura.setEstado(EstadoFatura.FECHADA);
+         fechadas.add(faturaRepository.save(fatura));
+
+         if (dia == null) {
+            log.warn("[Fechar faturas] Cliente {} com diaVencimento invalido ('{}'). Proxima fatura nao gerada.",
+               cnpjCpf, cliente.getDiaVencimento());
+            continue;
+         }
+         LocalDate proximoVencimento = vencimentoNoMes(YearMonth.from(fatura.getDataVencimento()).plusMonths(1), dia);
+         if (!faturaRepository.existsByCliente_CnpjCpfAndDataVencimento(cnpjCpf, proximoVencimento)) {
+            faturaRepository.save(montarFaturaComItens(cliente, assinatura, proximoVencimento));
+            proximasGeradas++;
+         }
+      }
+      return new ResultadoFechamento(null, fechadas, proximasGeradas);
+   }
+
+   private Razao verificarElegibilidade(Cliente cliente) {
+      if (!"S".equalsIgnoreCase(cliente.getAtivo())) return Razao.CLIENTE_INATIVO;
+      Assinatura assinatura = cliente.getAssinatura();
+      if (assinatura == null) return Razao.SEM_ASSINATURA;
+      if (assinatura.getStatus() != StatusAssinatura.ATIVA) return Razao.ASSINATURA_NAO_ATIVA;
+      if (assinatura.getProdutos() == null || assinatura.getProdutos().isEmpty()) return Razao.SEM_PRODUTOS;
+      return null;
+   }
+
+   /**
+    * Clientes ativos cujo vencimento cai na data informada. No ultimo dia do mes
+    * inclui tambem quem vence em dias que o mes nao tem (ex.: dia 31 em novembro vence dia 30).
+    */
+   private List<ClienteDTO> buscarClientesAtivosComVencimentoEm(LocalDate data) {
+      List<ClienteDTO> clientes = new ArrayList<>(clienteService.buscarClientesAtivosPorDiaVencimento(data.getDayOfMonth()));
+      if (data.getDayOfMonth() == data.lengthOfMonth()) {
+         for (int dia = data.getDayOfMonth() + 1; dia <= 31; dia++) {
+            clientes.addAll(clienteService.buscarClientesAtivosPorDiaVencimento(dia));
+         }
+      }
+      return clientes;
+   }
+
+   private LocalDate vencimentoNoMes(YearMonth mes, int dia) {
+      return mes.atDay(Math.min(dia, mes.lengthOfMonth()));
+   }
+
+   private Integer parseDiaVencimento(String diaVencimento) {
+      try {
+         int dia = Integer.parseInt(diaVencimento.trim());
+         return dia >= 1 && dia <= 31 ? dia : null;
+      } catch (NullPointerException | NumberFormatException e) {
+         return null;
+      }
+   }
+
+   /**
+    * Faturas fechadas ou vencidas, ainda nao pagas, com vencimento na data informada.
+    */
+   public List<Fatura> buscarPendentesComVencimentoEm(LocalDate dataVencimento) {
+      return faturaRepository.findAllByDataVencimentoAndEstadoIn(dataVencimento, ESTADOS_PENDENTES);
+   }
+
+   /**
+    * Rele a fatura do banco antes de um envio: devolve vazio se ela ja foi paga,
+    * nao esta mais pendente ou o cliente foi inativado.
+    */
+   @Transactional(readOnly = true)
+   public Optional<Fatura> buscarPendenteParaAviso(Long faturaId) {
+      return faturaRepository.findById(faturaId)
+         .filter(f -> f.getEstado() != null && ESTADOS_PENDENTES.contains(f.getEstado().getCod()))
+         .filter(f -> f.getCliente() != null && "S".equalsIgnoreCase(f.getCliente().getAtivo()));
    }
 
    private enum Razao {
-      GERADA, JA_EXISTIA, SEM_ASSINATURA, ASSINATURA_NAO_ATIVA, SEM_PRODUTOS
+      NADA_A_FECHAR, CLIENTE_INATIVO, SEM_ASSINATURA, ASSINATURA_NAO_ATIVA, SEM_PRODUTOS
    }
 
-   private static class ResultadoGeracao {
+   private static class ResultadoFechamento {
       final Razao razao;
-      final Cliente cliente;
-      final Fatura fatura;
+      final List<Fatura> fechadas;
+      final int proximasGeradas;
 
-      ResultadoGeracao(Razao razao, Cliente cliente, Fatura fatura) {
+      ResultadoFechamento(Razao razao, List<Fatura> fechadas, int proximasGeradas) {
          this.razao = razao;
-         this.cliente = cliente;
-         this.fatura = fatura;
+         this.fechadas = fechadas;
+         this.proximasGeradas = proximasGeradas;
+      }
+
+      static ResultadoFechamento ignorado(Razao razao) {
+         return new ResultadoFechamento(razao, List.of(), 0);
       }
    }
 
@@ -244,36 +333,52 @@ public class FaturaService {
          fatura);
    }
 
+   /**
+    * Bloqueia clientes com fatura nao paga ha DIAS_BLOQUEIO dias ou mais do vencimento
+    * (vencimento dia 10 -> bloqueio dia 20). A assinatura nao e suspensa para que o
+    * fechamento continue gerando as proximas faturas.
+    */
    @Transactional
    public void bloquearInadimplentes() {
-      LocalDate limite = LocalDate.now(BRASIL).minusDays(7);
-      List<Fatura> vencidas = faturaRepository.findAllByDataVencimentoIsBeforeAndEstado(limite, EstadoFatura.VENCIDA.getCod());
-      log.info("[Bloqueio D+7] {} fatura(s) vencidas ha mais de 7 dias", vencidas.size());
+      LocalDate limite = LocalDate.now(BRASIL).minusDays(DIAS_BLOQUEIO);
+      List<Fatura> atrasadas = faturaRepository.findAllByDataVencimentoLessThanEqualAndEstadoIn(limite, ESTADOS_PENDENTES);
+      log.info("[Bloqueio D+{}] {} fatura(s) nao paga(s) com vencimento ate {}",
+         DIAS_BLOQUEIO, atrasadas.size(), limite.format(FORMATTER_BR));
 
       Set<String> processados = new HashSet<>();
       int bloqueados = 0;
-      for (Fatura fatura : vencidas) {
+      for (Fatura fatura : atrasadas) {
          Cliente cliente = fatura.getCliente();
-         if (cliente == null || processados.contains(cliente.getCnpjCpf())) continue;
-         processados.add(cliente.getCnpjCpf());
-
+         if (cliente == null || !processados.add(cliente.getCnpjCpf())) continue;
          if ("S".equalsIgnoreCase(cliente.getBloqueado())) continue;
 
          cliente.setBloqueado("S");
          clienteRepository.save(cliente);
 
-         Assinatura assinatura = cliente.getAssinatura();
-         if (assinatura != null && assinatura.getStatus() != StatusAssinatura.SUSPENSA) {
-            assinatura.setStatus(StatusAssinatura.SUSPENSA);
-            assinaturaRepository.save(assinatura);
-         }
-
-         log.warn("[Bloqueio D+7] Cliente {} ({}) bloqueado. Fatura {}, vencimento {}, valor {}",
-            cliente.getCnpjCpf(), cliente.getNome(), fatura.getId(),
+         log.warn("[Bloqueio D+{}] Cliente {} ({}) bloqueado. Fatura {}, vencimento {}, valor {}",
+            DIAS_BLOQUEIO, cliente.getCnpjCpf(), cliente.getNome(), fatura.getId(),
             fatura.getDataVencimento(), fatura.getValor());
          bloqueados++;
       }
-      log.info("[Bloqueio D+7] Concluido. Bloqueados: {}", bloqueados);
+      log.info("[Bloqueio D+{}] Concluido. Bloqueados: {}", DIAS_BLOQUEIO, bloqueados);
+   }
+
+   /**
+    * Chamado apos registrar um pagamento: desbloqueia o cliente se ele nao tem
+    * mais nenhuma fatura pendente que justifique o bloqueio.
+    */
+   public void desbloquearSeQuitado(Cliente cliente) {
+      if (cliente == null || !"S".equalsIgnoreCase(cliente.getBloqueado())) return;
+
+      LocalDate limite = LocalDate.now(BRASIL).minusDays(DIAS_BLOQUEIO);
+      if (faturaRepository.existsByCliente_CnpjCpfAndDataVencimentoLessThanEqualAndEstadoIn(
+         cliente.getCnpjCpf(), limite, ESTADOS_PENDENTES)) {
+         return;
+      }
+
+      cliente.setBloqueado("N");
+      clienteRepository.save(cliente);
+      log.info("[Desbloqueio] Cliente {} ({}) desbloqueado apos pagamento.", cliente.getCnpjCpf(), cliente.getNome());
    }
 
    public void enviarEmailAvisoFaturaHTML(Fatura fatura) {
@@ -354,14 +459,16 @@ public class FaturaService {
 
       fatura.setDataPagamento(LocalDateTime.now());
       fatura.setEstado(EstadoFatura.PAGA);
+      fatura = faturaRepository.save(fatura);
 
-      return faturaRepository.save(fatura);
+      desbloquearSeQuitado(fatura.getCliente());
+      return fatura;
    }
 
    public void atualizarEstadoFatura() {
       LocalDate dataAtual = LocalDate.now(BRASIL);
 
-      List<Fatura> faturas = faturaRepository.findAllByDataVencimentoIsBeforeAndEstado(dataAtual, 1);
+      List<Fatura> faturas = faturaRepository.findAllByDataVencimentoIsBeforeAndEstado(dataAtual, EstadoFatura.FECHADA.getCod());
 
       faturas.forEach(fatura -> {
          fatura.setEstado(EstadoFatura.VENCIDA);

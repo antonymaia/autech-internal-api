@@ -37,6 +37,7 @@ public class PortalService {
     private final PagamentoRepository pagamentoRepository;
     private final PagamentoFaturaRepository pagamentoFaturaRepository;
     private final MercadoPagoService mercadoPagoService;
+    private final FaturaService faturaService;
 
     @Transactional(readOnly = true)
     public ClientePortalDTO buscarDadosCliente(String cnpjCpf) {
@@ -45,7 +46,11 @@ public class PortalService {
         return new ClientePortalDTO(
                 cliente.getCnpjCpf(),
                 resolverRazaoSocial(cliente),
-                faturas.stream().map(this::toFaturaDTO).collect(Collectors.toList())
+                faturas.stream()
+                        // ABERTA e a fatura do proximo mes: so aparece para o cliente depois de fechada
+                        .filter(f -> f.getEstado() != EstadoFatura.ABERTA)
+                        .map(this::toFaturaDTO)
+                        .collect(Collectors.toList())
         );
     }
 
@@ -61,6 +66,9 @@ public class PortalService {
 
         if (fatura.getEstado() == EstadoFatura.PAGA) {
             throw new BadRequestException("Fatura ja esta paga");
+        }
+        if (fatura.getEstado() == EstadoFatura.ABERTA) {
+            throw new BadRequestException("Fatura ainda nao esta disponivel para pagamento");
         }
 
         try {
@@ -223,6 +231,8 @@ public class PortalService {
         if (orderId != null) fatura.setMpOrderId(orderId);
         if (paymentId != null) fatura.setMpPaymentId(paymentId);
         faturaRepository.save(fatura);
+
+        faturaService.desbloquearSeQuitado(fatura.getCliente());
     }
 
     // ---------- helpers ----------

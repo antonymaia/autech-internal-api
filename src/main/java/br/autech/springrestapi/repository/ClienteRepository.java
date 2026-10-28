@@ -1,7 +1,6 @@
 package br.autech.springrestapi.repository;
 
 import br.autech.springrestapi.dtos.ClienteDTO;
-import br.autech.springrestapi.dtos.ClienteDadosCobrancaDto;
 import br.autech.springrestapi.model.Cliente;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -66,10 +65,11 @@ public interface ClienteRepository extends JpaRepository<Cliente, String> {
       " c.telefone, " +
       " c.bloqueado," +
       " c.ativo," +
-      " c.valorMensalidade," +
+      " a.valor_total," +
       " c.diaVencimento" +
       ") FROM Cliente c " +
       " LEFT JOIN c.endereco e " +
+      " LEFT JOIN c.assinatura a " +
       " WHERE c.ativo = 'S' AND c.diaVencimento LIKE :diaVencimento ")
    List<ClienteDTO> buscarResumoClienteAtivosPorDiaVencimento(String diaVencimento);
 
@@ -85,10 +85,11 @@ public interface ClienteRepository extends JpaRepository<Cliente, String> {
       " c.telefone, " +
       " c.bloqueado," +
       " c.ativo," +
-      " c.valorMensalidade," +
+      " a.valor_total," +
       " c.diaVencimento" +
       ") FROM Cliente c " +
       " LEFT JOIN c.endereco e " +
+      " LEFT JOIN c.assinatura a " +
       " LEFT JOIN e.cidade cd " +
       " LEFT JOIN cd.estado ed" +
       " WHERE c.cnpjCpf LIKE :termoBusca ")
@@ -106,10 +107,11 @@ public interface ClienteRepository extends JpaRepository<Cliente, String> {
       " c.telefone, " +
       " c.bloqueado," +
       " c.ativo," +
-      " c.valorMensalidade," +
+      " a.valor_total," +
       " c.diaVencimento" +
       ") FROM Cliente c " +
       " LEFT JOIN c.endereco e " +
+      " LEFT JOIN c.assinatura a " +
       " LEFT JOIN e.cidade cd " +
       " LEFT JOIN cd.estado ed" +
       " WHERE c.nome LIKE :termoBusca ")
@@ -127,10 +129,11 @@ public interface ClienteRepository extends JpaRepository<Cliente, String> {
       " c.telefone, " +
       " c.bloqueado," +
       " c.ativo," +
-      " c.valorMensalidade," +
+      " a.valor_total," +
       " c.diaVencimento" +
       ") FROM Cliente c " +
       " LEFT JOIN c.endereco e " +
+      " LEFT JOIN c.assinatura a " +
       " LEFT JOIN e.cidade cd " +
       " LEFT JOIN cd.estado ed" +
       " WHERE e.bairro LIKE :termoBusca ")
@@ -148,26 +151,15 @@ public interface ClienteRepository extends JpaRepository<Cliente, String> {
       " c.telefone, " +
       " c.bloqueado," +
       " c.ativo," +
-      " c.valorMensalidade," +
+      " a.valor_total," +
       " c.diaVencimento" +
       ") FROM Cliente c " +
       " LEFT JOIN c.endereco e " +
+      " LEFT JOIN c.assinatura a " +
       " LEFT JOIN e.cidade cd " +
       " LEFT JOIN cd.estado ed" +
       " WHERE e.cidade.nome LIKE :termoBusca ")
    Page<ClienteDTO> buscarClienteDtoPorCidade(String termoBusca, Pageable pageable);
-
-   @Query(value = "" +
-      " SELECT new br.autech.springrestapi.dtos.ClienteDadosCobrancaDto(" +
-      " c.cnpjCpf, " +
-      " c.nomeResponsavel, " +
-      " c.razaoSocialNome," +
-      " c.valorMensalidade," +
-      " c.diaVencimento, " +
-      " c.telefone " +
-      ") FROM Cliente c " +
-      " WHERE c.cnpjCpf = :cnpjCpf ")
-   ClienteDadosCobrancaDto buscarDadosCobranca(String cnpjCpf);
 
    @Query(value = "SELECT COUNT(c.cnpjCpf) FROM Cliente c WHERE c.ativo = 'S' AND c.bloqueado = 'N' ")
    Integer numberActiveCostomers();
@@ -175,6 +167,7 @@ public interface ClienteRepository extends JpaRepository<Cliente, String> {
    @Query(value = "SELECT COUNT(c.cnpjCpf) FROM Cliente c WHERE c.ativo = 'S' AND c.bloqueado = 'S' ")
    Integer numberBlockedCustomers();
 
-   @Query(value = "SELECT SUM(c.valorMensalidade) FROM Cliente c WHERE c.ativo = 'S' ")
+   @Query(value = "SELECT SUM(a.valor_total) FROM Assinatura a WHERE a.cliente.ativo = 'S' " +
+      " AND a.status = br.autech.springrestapi.model.enums.StatusAssinatura.ATIVA ")
    BigDecimal getTotalIncome();
 }

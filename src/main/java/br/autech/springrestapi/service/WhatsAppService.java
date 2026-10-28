@@ -1,10 +1,9 @@
 package br.autech.springrestapi.service;
 
-import br.autech.springrestapi.dtos.ClienteDTO;
-import br.autech.springrestapi.dtos.ClienteDadosCobrancaDto;
 import br.autech.springrestapi.model.Cliente;
 import br.autech.springrestapi.model.Fatura;
-import br.autech.springrestapi.repository.ClienteRepository;
+import br.autech.springrestapi.model.enums.EstadoFatura;
+import br.autech.springrestapi.repository.FaturaRepository;
 import br.autech.springrestapi.service.exception.BadRequestException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -16,17 +15,19 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class WhatsAppService {
-   private final ClienteRepository clienteRepository;
+   private final FaturaRepository faturaRepository;
 
    private static final Logger LOG_COBRANCA = LoggerFactory.getLogger("cobranca-whatsapp");
 
@@ -40,11 +41,21 @@ public class WhatsAppService {
    private String instance;
    @Value("${whatsapp.evolution.api-key:}")
    private String apiKey;
-   @Value("${pix.chave}")
-   private String chavePix;
-   @Value("${pix.nome}")
-   private String nomePix;
+   @Value("${portal.url:https://pagar.autech.net.br}")
+   private String portalUrl;
 
+   public enum AvisoFatura {
+      FECHAMENTO("fechamento"),
+      VESPERA("1 dia antes"),
+      DIA_VENCIMENTO("dia do vencimento"),
+      ATRASO("2 dias apos o vencimento");
+
+      private final String contexto;
+
+      AvisoFatura(String contexto) {
+         this.contexto = contexto;
+      }
+   }
 
    public void enviarMensagemTeste(String telefone) {
       if (!isConfigurado()) {
@@ -56,125 +67,120 @@ public class WhatsAppService {
          log.warn("Telefone inválido para teste: '{}'", telefone);
          return;
       }
-      LocalDate amanha = LocalDate.now(BRASIL).plusDays(1);
-
-      String valor = "R$ " + "135.99".replace(".", ",");
-      String vencimento = amanha.format(FORMATTER);
-
-      String mensagem = String.format(
-         "Olá, %s! 👋%n%n" +
-            "Passando para lembrar que sua mensalidade *AUTECH* vence *amanhã*, %s.%n" +
-            "Valor: *%s*%n%n" +
-            "Chave Pix CNPJ%n" +
-            "_%s_%n" +
-            "_%s_%n%n" +
-            "Evite a interrupção do serviço realizando o pagamento em dia.%n" +
-            "Dúvidas? Entre em contato conosco. 😊",
-         "", vencimento, valor, chavePix, nomePix);
+      LocalDate vencimento = LocalDate.now(BRASIL).plusDays(1);
+      String mensagem = montarMensagem(AvisoFatura.VESPERA, "",
+         vencimento.format(FORMATTER), formatarValor(new BigDecimal("135.99")));
       enviar(telefoneFormatado, mensagem, log);
    }
 
-   // Enviado 1 dia antes do vencimento
-   public void enviarAvisoCobranca(ClienteDTO cliente, LocalDate dataVencimento) {
-      String contexto = "1 dia antes";
-      if (cliente.getMensalidade() == null) {
-         LOG_COBRANCA.warn("[{}] Cliente {} ({}) sem valorMensalidade. Mensagem nao enviada. Vencimento: {}, Telefone: {}",
-            contexto, cliente.getCnpjCpf(), nomeParaLog(cliente),
-            dataVencimento.format(FORMATTER), valorOuNd(cliente.getTelefone()));
-         return;
+   /**
+    * Envia o aviso da fatura para o WhatsApp do cliente. Falhas e dados faltando
+    * vao para o log de cobranca. Retorna true se a mensagem foi aceita pela API.
+    */
+   public boolean enviarAvisoFatura(Fatura fatura, AvisoFatura aviso) {
+      String contexto = aviso.contexto;
+      if (fatura == null || fatura.getCliente() == null
+         || fatura.getValor() == null || fatura.getDataVencimento() == null) {
+         LOG_COBRANCA.warn("[{}] Dados invalidos para envio (fatura, cliente, valor ou vencimento nulos). Fatura: {}",
+            contexto, fatura != null ? fatura.getId() : null);
+         return false;
       }
-      String telefone = prepararTelefoneCliente(cliente, contexto, dataVencimento);
-      if (telefone == null) return;
 
-      String nome = resolverNome(cliente);
-      String valor = "R$ " + cliente.getMensalidade().toPlainString().replace(".", ",");
-      String vencimento = dataVencimento.format(FORMATTER);
-
-      String mensagem = String.format(
-         "Olá, %s! 👋%n%n" +
-            "Passando para lembrar que sua mensalidade *AUTECH* vence *amanhã*, %s.%n" +
-            "Valor: *%s*%n%n" +
-            "Chave Pix CNPJ%n" +
-            "_%s_%n" +
-            "_%s_%n%n" +
-            "Evite a interrupção do serviço realizando o pagamento em dia.%n" +
-            "Dúvidas? Entre em contato conosco. 😊",
-         nome, vencimento, valor, chavePix, nomePix);
-
-      enviarCobranca(cliente, telefone, mensagem, contexto, dataVencimento);
-   }
-
-   // Enviado no dia do vencimento
-   public void enviarAvisoCobrancaDia(ClienteDTO cliente, LocalDate dataVencimento) {
-      String contexto = "dia do vencimento";
-      if (cliente.getMensalidade() == null) {
-         LOG_COBRANCA.warn("[{}] Cliente {} ({}) sem valorMensalidade. Mensagem nao enviada. Vencimento: {}, Telefone: {}",
-            contexto, cliente.getCnpjCpf(), nomeParaLog(cliente),
-            dataVencimento.format(FORMATTER), valorOuNd(cliente.getTelefone()));
-         return;
-      }
-      String telefone = prepararTelefoneCliente(cliente, contexto, dataVencimento);
-      if (telefone == null) return;
-
-      String nome = resolverNome(cliente);
-      String valor = "R$ " + cliente.getMensalidade().toPlainString().replace(".", ",");
-      String vencimento = dataVencimento.format(FORMATTER);
-
-      String mensagem = String.format(
-         "Olá, %s! 👋%n%n" +
-            "Passando para lembrar que sua mensalidade *AUTECH* vence *hoje*, %s.%n" +
-            "Valor: *%s*%n%n" +
-            "Chave Pix CNPJ%n" +
-            "_%s_%n" +
-            "_%s_%n%n" +
-            "Evite a interrupção do serviço realizando o pagamento em dia.%n" +
-            "Dúvidas? Entre em contato conosco. 😊",
-         nome, vencimento, valor, chavePix, nomePix);
-
-      enviarCobranca(cliente, telefone, mensagem, contexto, dataVencimento);
-   }
-
-   private String prepararTelefoneCliente(ClienteDTO cliente, String contexto, LocalDate dataVencimento) {
-      String venc = dataVencimento.format(FORMATTER);
-      String valor = cliente.getMensalidade() != null
-         ? cliente.getMensalidade().toPlainString()
-         : "n/d";
+      Cliente cliente = fatura.getCliente();
+      String nomeLog = nomeClienteParaLog(cliente);
+      String vencimento = fatura.getDataVencimento().format(FORMATTER);
+      String valor = formatarValor(fatura.getValor());
 
       if (!isConfigurado()) {
-         LOG_COBRANCA.warn("[{}] WhatsApp Evolution API nao configurada. Cliente {} ({}) nao notificado. Vencimento: {}, Valor: {}",
-            contexto, cliente.getCnpjCpf(), nomeParaLog(cliente), venc, valor);
-         return null;
+         LOG_COBRANCA.warn("[{}] WhatsApp Evolution API nao configurada. Fatura {} do cliente {} ({}) nao notificada. Vencimento: {}, Valor: {}",
+            contexto, fatura.getId(), cliente.getCnpjCpf(), nomeLog, vencimento, valor);
+         return false;
       }
+
       String telefone = cliente.getTelefone();
       if (telefone == null || telefone.isBlank()) {
-         LOG_COBRANCA.warn("[{}] Cliente {} ({}) sem telefone cadastrado. Vencimento: {}, Valor: {}",
-            contexto, cliente.getCnpjCpf(), nomeParaLog(cliente), venc, valor);
-         return null;
+         LOG_COBRANCA.warn("[{}] Cliente {} ({}) sem telefone cadastrado. Fatura {}, Vencimento: {}, Valor: {}",
+            contexto, cliente.getCnpjCpf(), nomeLog, fatura.getId(), vencimento, valor);
+         return false;
       }
+
       String telefoneFormatado = normalizarTelefone(telefone);
       if (telefoneFormatado == null) {
-         LOG_COBRANCA.warn("[{}] Telefone invalido para cliente {} ({}): '{}'. Vencimento: {}, Valor: {}",
-            contexto, cliente.getCnpjCpf(), nomeParaLog(cliente), telefone, venc, valor);
-         return null;
+         LOG_COBRANCA.warn("[{}] Telefone invalido para cliente {} ({}): '{}'. Fatura {}, Vencimento: {}, Valor: {}",
+            contexto, cliente.getCnpjCpf(), nomeLog, telefone, fatura.getId(), vencimento, valor);
+         return false;
       }
-      return telefoneFormatado;
+
+      String mensagem = montarMensagem(aviso, resolverNomeCliente(cliente), vencimento, valor);
+
+      try {
+         ResponseEntity<String> response = doSend(telefoneFormatado, mensagem);
+         log.info("WhatsApp [{}] enviado para {} ({}) tel {} - fatura {} - status {}",
+            contexto, cliente.getCnpjCpf(), nomeLog, telefoneFormatado,
+            fatura.getId(), response.getStatusCode());
+         return true;
+      } catch (Exception e) {
+         LOG_COBRANCA.error("[{}] Falha ao enviar WhatsApp. Cliente: {} ({}), Telefone: {}, Fatura: {}, Vencimento: {}, Valor: {}, Erro: {}",
+            contexto, cliente.getCnpjCpf(), nomeLog, telefoneFormatado,
+            fatura.getId(), vencimento, valor, e.getMessage());
+         return false;
+      }
    }
 
-   private void enviarCobranca(ClienteDTO cliente, String telefone, String mensagem,
-                               String contexto, LocalDate dataVencimento) {
-      try {
-         ResponseEntity<String> response = doSend(telefone, mensagem);
-         log.info("WhatsApp [{}] enviado para {} ({}) tel {} - status {}",
-            contexto, cliente.getCnpjCpf(), nomeParaLog(cliente),
-            telefone, response.getStatusCode());
-      } catch (Exception e) {
-         String valor = cliente.getMensalidade() != null
-            ? cliente.getMensalidade().toPlainString()
-            : "n/d";
-         LOG_COBRANCA.error("[{}] Falha ao enviar WhatsApp. Cliente: {} ({}), Telefone: {}, Vencimento: {}, Valor: {}, Erro: {}",
-            contexto, cliente.getCnpjCpf(), nomeParaLog(cliente), telefone,
-            dataVencimento.format(FORMATTER), valor, e.getMessage());
+   /**
+    * Envio manual: cobra a fatura pendente (fechada ou vencida) mais antiga do cliente.
+    */
+   public void enviarMensagemCobranca(String cnpjCpf) {
+      List<Fatura> pendentes = faturaRepository.findAllByCliente_CnpjCpfAndEstadoInOrderByDataVencimento(
+         cnpjCpf, List.of(EstadoFatura.FECHADA.getCod(), EstadoFatura.VENCIDA.getCod()));
+      if (pendentes.isEmpty()) {
+         throw new BadRequestException("Mensagem não enviada, cliente não possui fatura pendente");
       }
+
+      Fatura fatura = pendentes.get(0);
+      LocalDate hoje = LocalDate.now(BRASIL);
+      AvisoFatura aviso;
+      if (fatura.getDataVencimento().isBefore(hoje)) aviso = AvisoFatura.ATRASO;
+      else if (fatura.getDataVencimento().isEqual(hoje)) aviso = AvisoFatura.DIA_VENCIMENTO;
+      else if (fatura.getDataVencimento().isEqual(hoje.plusDays(1))) aviso = AvisoFatura.VESPERA;
+      else aviso = AvisoFatura.FECHAMENTO;
+
+      if (!enviarAvisoFatura(fatura, aviso)) {
+         throw new BadRequestException("Mensagem não enviada, verifique os dados do cliente");
+      }
+   }
+
+   private String montarMensagem(AvisoFatura aviso, String nome, String vencimento, String valor) {
+      String abertura;
+      String fechamento = "Evite a interrupção do serviço realizando o pagamento em dia.\n\n";
+      switch (aviso) {
+         case FECHAMENTO:
+            abertura = "Sua fatura *AUTECH* foi fechada e já está disponível para pagamento.";
+            break;
+         case VESPERA:
+            abertura = "Passando para lembrar que sua fatura *AUTECH* vence *amanhã*.";
+            break;
+         case DIA_VENCIMENTO:
+            abertura = "Passando para lembrar que sua fatura *AUTECH* vence *hoje*.";
+            break;
+         default:
+            abertura = "Identificamos que sua fatura *AUTECH* ainda está *em aberto*.";
+            fechamento = "Evite a interrupção do serviço regularizando o pagamento. "
+               + "Se já pagou, desconsidere esta mensagem.\n\n";
+      }
+
+      return "Olá, " + nome + "! 👋\n\n"
+         + abertura + "\n\n"
+         + "📅 Vencimento: *" + vencimento + "*\n"
+         + "💰 Valor: *" + valor + "*\n\n"
+         + "Para pagar via PIX, acesse o portal e informe seu CPF/CNPJ:\n"
+         + "👉 " + portalUrl + "\n\n"
+         + fechamento
+         + "Dúvidas? Entre em contato conosco. 😊";
+   }
+
+   private String formatarValor(BigDecimal valor) {
+      return "R$ " + valor.setScale(2, RoundingMode.HALF_UP).toPlainString().replace(".", ",");
    }
 
    private void enviar(String telefone, String mensagem, Logger errorLogger) {
@@ -199,23 +205,6 @@ public class WhatsAppService {
       payload.put("text", mensagem);
 
       return restTemplate.postForEntity(url, new HttpEntity<>(payload, headers), String.class);
-   }
-
-   private String resolverNome(ClienteDTO cliente) {
-      if (cliente.getNomeResponsavel() != null && cliente.getNomeResponsavel().isBlank()) {
-         return cliente.getNomeResponsavel();
-      }
-      return cliente.getRazaoSocial();
-   }
-
-   private String nomeParaLog(ClienteDTO cliente) {
-      String nomeResp = cliente.getNomeResponsavel();
-      if (nomeResp != null && !nomeResp.isBlank()) return nomeResp;
-      return cliente.getRazaoSocial() != null ? cliente.getRazaoSocial() : "sem nome";
-   }
-
-   private String valorOuNd(String valor) {
-      return (valor == null || valor.isBlank()) ? "n/d" : valor;
    }
 
    private boolean isConfigurado() {
@@ -252,62 +241,6 @@ public class WhatsAppService {
       return "5581" + "9" + d.substring(d.length() - 8);
    }
 
-   public void enviarAvisoFaturaGerada(Cliente cliente, Fatura fatura) {
-      String contexto = "fatura gerada";
-      if (cliente == null || fatura == null
-              || fatura.getValor() == null || fatura.getDataVencimento() == null) {
-         LOG_COBRANCA.warn("[{}] Dados invalidos para envio (cliente ou fatura nulos).", contexto);
-         return;
-      }
-
-      if (!isConfigurado()) {
-         LOG_COBRANCA.warn("[{}] WhatsApp Evolution API nao configurada. Fatura {} do cliente {} nao notificada.",
-                 contexto, fatura.getId(), cliente.getCnpjCpf());
-         return;
-      }
-
-      String telefone = cliente.getTelefone();
-      if (telefone == null || telefone.isBlank()) {
-         LOG_COBRANCA.warn("[{}] Cliente {} ({}) sem telefone. Fatura {} nao notificada.",
-                 contexto, cliente.getCnpjCpf(), nomeClienteParaLog(cliente), fatura.getId());
-         return;
-      }
-
-      String telefoneFormatado = normalizarTelefone(telefone);
-      if (telefoneFormatado == null) {
-         LOG_COBRANCA.warn("[{}] Telefone invalido para cliente {} ({}): '{}'. Fatura {} nao notificada.",
-                 contexto, cliente.getCnpjCpf(), nomeClienteParaLog(cliente), telefone, fatura.getId());
-         return;
-      }
-
-      String nome = resolverNomeCliente(cliente);
-      String valor = "R$ " + fatura.getValor().toPlainString().replace(".", ",");
-      String vencimento = fatura.getDataVencimento().format(FORMATTER);
-
-      String mensagem = String.format(
-         "Olá, %s! 👋%n%n" +
-            "Sua fatura *AUTECH* foi gerada.%n%n" +
-            "📅 Vencimento: *%s*%n" +
-            "💰 Valor: *%s*%n%n" +
-            "Chave Pix CNPJ%n" +
-            "_%s_%n" +
-            "_%s_%n%n" +
-            "Efetue o pagamento até o vencimento para evitar a interrupção do serviço.%n" +
-            "Dúvidas? Entre em contato conosco. 😊",
-         nome, vencimento, valor, chavePix, nomePix);
-
-      try {
-         ResponseEntity<String> response = doSend(telefoneFormatado, mensagem);
-         log.info("WhatsApp [{}] enviado para {} ({}) tel {} - fatura {} - status {}",
-                 contexto, cliente.getCnpjCpf(), nome, telefoneFormatado,
-                 fatura.getId(), response.getStatusCode());
-      } catch (Exception e) {
-         LOG_COBRANCA.error("[{}] Falha ao enviar WhatsApp. Cliente: {} ({}), Telefone: {}, Fatura: {}, Vencimento: {}, Valor: {}, Erro: {}",
-                 contexto, cliente.getCnpjCpf(), nome, telefoneFormatado,
-                 fatura.getId(), vencimento, valor, e.getMessage());
-      }
-   }
-
    private String resolverNomeCliente(Cliente cliente) {
       String nomeResp = cliente.getNomeResponsavel();
       if (nomeResp != null && !nomeResp.isBlank()) return nomeResp;
@@ -318,42 +251,5 @@ public class WhatsAppService {
       String nomeResp = cliente.getNomeResponsavel();
       if (nomeResp != null && !nomeResp.isBlank()) return nomeResp;
       return cliente.getNome() != null ? cliente.getNome() : "sem nome";
-   }
-
-   public void enviarMensagemCobranca(String cnpjCpf) {
-      ClienteDadosCobrancaDto cliente = clienteRepository.buscarDadosCobranca(cnpjCpf);
-      if (cliente.getValorMensalidade() == null || cliente.getValorMensalidade().compareTo(BigDecimal.ZERO) <= 0) {
-         throw new BadRequestException("Mensagem não enviada, verifique os dados do cliente");
-      }
-      if (cliente.getDiaVencimento() == null || cliente.getDiaVencimento().isBlank()) {
-         throw new BadRequestException("Mensagem não enviada, verique os dados do cliente");
-      }
-      if (cliente.getTelefone() == null || cliente.getTelefone().isBlank()) {
-         throw new BadRequestException("Mensagem não enviada, verique os dados do cliente");
-      }
-
-      String nome = "";
-      if (cliente.getNomeResponsavel() != null && !cliente.getNomeResponsavel().isBlank())
-         nome = cliente.getNomeResponsavel();
-      else nome = cliente.getRazaoSocial();
-
-      String telefone = normalizarTelefone(cliente.getTelefone());
-
-      LocalDate date = LocalDate.now(ZoneId.of("America/Sao_Paulo"));
-      String mes = date.getMonthValue() < 10 ? "0" + date.getMonthValue() : "" + date.getMonthValue();
-
-      String mensagem = String.format(
-         "Olá, %s! 👋%n%n" +
-            "Empresa: _%s_%n" +
-            "Passando para lembrar que sua mensalidade *AUTECH* venceu dia %s" + "/" + mes + "/" + date.getYear() + ".%n" +
-            "Valor: *%s*%n%n" +
-            "Chave Pix CNPJ%n" +
-            "_%s_%n" +
-            "_%s_%n%n" +
-            "Evite a interrupção do serviço realizando o pagamento em dia.%n" +
-            "Dúvidas? Entre em contato conosco. 😊",
-         nome, cliente.getRazaoSocial(), cliente.getDiaVencimento(), cliente.getValorMensalidade(), chavePix, nomePix);
-
-      enviar(telefone, mensagem, log);
    }
 }
