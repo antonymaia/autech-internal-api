@@ -122,6 +122,23 @@ public class ClienteService {
             searchTerm = '%' + searchTerm + "%";
             return clienteRepository.buscarClienteDtoPorCidade(searchTerm, pageable);
         }
+        if (searchId == 5) {
+            Pageable pageable = PageRequest.of(page, size);
+            searchTerm = '%' + searchTerm.toUpperCase() + "%";
+            return clienteRepository.buscarClienteDtoPorRazaoSocial(searchTerm, pageable);
+        }
+        if (searchId == 6) {
+            Pageable pageable = PageRequest.of(page, size);
+            searchTerm = '%' + searchTerm.toUpperCase() + "%";
+            return clienteRepository.buscarClienteDtoPorNomeResponsavel(searchTerm, pageable);
+        }
+        if (searchId == 7) {
+            String digitos = searchTerm.replaceAll("\\D", "");
+            if (digitos.isEmpty())
+                throw new BadRequestException("Informe ao menos um dígito do telefone");
+            Pageable pageable = PageRequest.of(page, size);
+            return clienteRepository.buscarClienteDtoPorTelefone('%' + digitos + "%", pageable);
+        }
 
         return null;
     }

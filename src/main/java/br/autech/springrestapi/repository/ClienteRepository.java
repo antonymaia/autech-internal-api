@@ -161,6 +161,75 @@ public interface ClienteRepository extends JpaRepository<Cliente, String> {
       " WHERE e.cidade.nome LIKE :termoBusca ")
    Page<ClienteDTO> buscarClienteDtoPorCidade(String termoBusca, Pageable pageable);
 
+   @Query(value = "" +
+      " SELECT new br.autech.springrestapi.dtos.ClienteDTO(" +
+      " c.cnpjCpf, " +
+      " c.razaoSocialNome," +
+      " c.nome," +
+      " c.nomeResponsavel, " +
+      " e.bairro," +
+      " cd.nome," +
+      " ed.uf," +
+      " c.telefone, " +
+      " c.bloqueado," +
+      " c.ativo," +
+      " a.valor_total," +
+      " c.diaVencimento" +
+      ") FROM Cliente c " +
+      " LEFT JOIN c.endereco e " +
+      " LEFT JOIN c.assinatura a " +
+      " LEFT JOIN e.cidade cd " +
+      " LEFT JOIN cd.estado ed" +
+      " WHERE UPPER(c.razaoSocialNome) LIKE :termoBusca ")
+   Page<ClienteDTO> buscarClienteDtoPorRazaoSocial(String termoBusca, Pageable pageable);
+
+   @Query(value = "" +
+      " SELECT new br.autech.springrestapi.dtos.ClienteDTO(" +
+      " c.cnpjCpf, " +
+      " c.razaoSocialNome," +
+      " c.nome," +
+      " c.nomeResponsavel, " +
+      " e.bairro," +
+      " cd.nome," +
+      " ed.uf," +
+      " c.telefone, " +
+      " c.bloqueado," +
+      " c.ativo," +
+      " a.valor_total," +
+      " c.diaVencimento" +
+      ") FROM Cliente c " +
+      " LEFT JOIN c.endereco e " +
+      " LEFT JOIN c.assinatura a " +
+      " LEFT JOIN e.cidade cd " +
+      " LEFT JOIN cd.estado ed" +
+      " WHERE UPPER(c.nomeResponsavel) LIKE :termoBusca ")
+   Page<ClienteDTO> buscarClienteDtoPorNomeResponsavel(String termoBusca, Pageable pageable);
+
+   // Compara so os digitos: ignora parenteses, traco, ponto, espaco e '+' gravados no telefone
+   @Query(value = "" +
+      " SELECT new br.autech.springrestapi.dtos.ClienteDTO(" +
+      " c.cnpjCpf, " +
+      " c.razaoSocialNome," +
+      " c.nome," +
+      " c.nomeResponsavel, " +
+      " e.bairro," +
+      " cd.nome," +
+      " ed.uf," +
+      " c.telefone, " +
+      " c.bloqueado," +
+      " c.ativo," +
+      " a.valor_total," +
+      " c.diaVencimento" +
+      ") FROM Cliente c " +
+      " LEFT JOIN c.endereco e " +
+      " LEFT JOIN c.assinatura a " +
+      " LEFT JOIN e.cidade cd " +
+      " LEFT JOIN cd.estado ed" +
+      " WHERE FUNCTION('REPLACE', FUNCTION('REPLACE', FUNCTION('REPLACE', FUNCTION('REPLACE'," +
+      "   FUNCTION('REPLACE', FUNCTION('REPLACE', c.telefone, '(', ''), ')', ''), '-', ''), ' ', ''), '.', ''), '+', '')" +
+      "   LIKE :termoBusca ")
+   Page<ClienteDTO> buscarClienteDtoPorTelefone(String termoBusca, Pageable pageable);
+
    @Query(value = "SELECT COUNT(c.cnpjCpf) FROM Cliente c WHERE c.ativo = 'S' AND c.bloqueado = 'N' ")
    Integer numberActiveCostomers();
 
