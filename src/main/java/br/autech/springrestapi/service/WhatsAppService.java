@@ -68,7 +68,7 @@ public class WhatsAppService {
          return;
       }
       LocalDate vencimento = LocalDate.now(BRASIL).plusDays(1);
-      String mensagem = montarMensagem(AvisoFatura.VESPERA, "",
+      String mensagem = montarMensagem(AvisoFatura.VESPERA, "", "00000000000",
          vencimento.format(FORMATTER), formatarValor(new BigDecimal("135.99")));
       enviar(telefoneFormatado, mensagem, log);
    }
@@ -111,7 +111,7 @@ public class WhatsAppService {
          return false;
       }
 
-      String mensagem = montarMensagem(aviso, resolverNomeCliente(cliente), vencimento, valor);
+      String mensagem = montarMensagem(aviso, resolverNomeCliente(cliente), cliente.getCnpjCpf(), vencimento, valor);
 
       try {
          ResponseEntity<String> response = doSend(telefoneFormatado, mensagem);
@@ -132,7 +132,7 @@ public class WhatsAppService {
     */
    public void enviarMensagemCobranca(String cnpjCpf) {
       List<Fatura> pendentes = faturaRepository.findAllByCliente_CnpjCpfAndEstadoInOrderByDataVencimento(
-         cnpjCpf, List.of(EstadoFatura.FECHADA.getCod(), EstadoFatura.VENCIDA.getCod()));
+         cnpjCpf, List.of(EstadoFatura.FECHADA.getCod(), EstadoFatura.VENCIDA.getCod(), EstadoFatura.ABERTA.getCod()));
       if (pendentes.isEmpty()) {
          throw new BadRequestException("Mensagem não enviada, cliente não possui fatura pendente");
       }
@@ -150,7 +150,7 @@ public class WhatsAppService {
       }
    }
 
-   private String montarMensagem(AvisoFatura aviso, String nome, String vencimento, String valor) {
+   private String montarMensagem(AvisoFatura aviso, String nome, String cnpjCpf, String vencimento, String valor) {
       String abertura;
       String fechamento = "Evite a interrupção do serviço realizando o pagamento em dia.\n\n";
       switch (aviso) {
@@ -174,6 +174,7 @@ public class WhatsAppService {
          + "📅 Vencimento: *" + vencimento + "*\n"
          + "💰 Valor: *" + valor + "*\n\n"
          + "Para pagar via PIX, acesse o portal e informe seu CPF/CNPJ:\n"
+         + cnpjCpf + "\n\n"
          + "👉 " + portalUrl + "\n\n"
          + fechamento
          + "Dúvidas? Entre em contato conosco. 😊";
