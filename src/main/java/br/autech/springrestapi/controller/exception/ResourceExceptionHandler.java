@@ -7,11 +7,30 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import javax.servlet.http.HttpServletRequest;
 
 @ControllerAdvice
 public class ResourceExceptionHandler {
+
+	@ExceptionHandler(ConflitoException.class)
+	public ResponseEntity<StandardError> conflito(ConflitoException e, HttpServletRequest request){
+
+		StandardError err = new StandardError(System.currentTimeMillis(), HttpStatus.CONFLICT.value(),
+				"Conflito", e.getMessage(),
+				request.getRequestURI());
+		return ResponseEntity.status(HttpStatus.CONFLICT).body(err);
+	}
+
+	@ExceptionHandler(MaxUploadSizeExceededException.class)
+	public ResponseEntity<StandardError> arquivoGrande(MaxUploadSizeExceededException e, HttpServletRequest request){
+
+		StandardError err = new StandardError(System.currentTimeMillis(), HttpStatus.PAYLOAD_TOO_LARGE.value(),
+				"Arquivo grande demais", "O arquivo passa do tamanho máximo permitido",
+				request.getRequestURI());
+		return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(err);
+	}
 
 
 	@ExceptionHandler(BadRequestException.class)

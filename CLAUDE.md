@@ -64,7 +64,9 @@ spring.profiles.active=dev
 
 ## Segurança e CORS
 
-`SecurityConfig` libera todos os endpoints (`.anyRequest().permitAll()`) e configura CORS para `localhost:4200`. CSRF está desabilitado. Ao adicionar restrições de acesso, editar esta classe.
+`SecurityConfig` libera os endpoints (`.anyRequest().permitAll()`), exceto `/downloads/**`, que exige o token do login dos colaboradores (`POST /usuario/login` devolve `token`) de um usuário com `USUARIOS.PODE_PUBLICAR`. O `TokenFilter` lê o `Authorization: Bearer` e ignora token inválido (o site manda o token do portal do cliente para esta API também). CSRF está desabilitado. Ao adicionar restrições de acesso, editar esta classe.
+
+`POST /downloads/arquivos` (multipart: `pasta`, `arquivo`, `substituir`) grava na pasta `downloads.raiz` (`DOWNLOADS_RAIZ`), servida pelo nginx de downloads.autech.net.br. Segredo do token: `jwt.secret` (`JWT_SECRET`).
 
 ## Tarefas Agendadas
 

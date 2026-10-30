@@ -13,3 +13,9 @@ services:
       - MP_WEBHOOK_URL=https://internalapi.autech.net.br/pub/webhook/mercadopago
     # - MP_SANDBOX_PAYER_EMAIL=test_user_477609484274299291@testuser.com
       - PORTAL_CORS_ORIGIN=https://pagar.autech.net.br,http://localhost:4201
+      # Segredo do token dos colaboradores: vem do .env ao lado deste arquivo (JWT_SECRET=..., openssl rand -base64 48)
+      - JWT_SECRET=${JWT_SECRET:-}
+      # Pasta do nginx de downloads.autech.net.br, montada abaixo
+      - DOWNLOADS_RAIZ=/downloads
+    volumes:
+      - /var/www/downloads:/downloads
