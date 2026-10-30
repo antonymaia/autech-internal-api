@@ -326,6 +326,11 @@ public class FaturaService {
       }
 
       Fatura fatura = montarFaturaComItens(cliente, assinatura, dataVencimento);
+      // O cron so fecha ABERTA com vencimento entre hoje e hoje + DIAS_FECHAMENTO; fora disso ela
+      // ficaria ABERTA para sempre e oculta no portal. Ja nasce disponivel para pagamento.
+      if (!dataVencimento.isAfter(hoje.plusDays(DIAS_FECHAMENTO))) {
+         fatura.setEstado(dataVencimento.isBefore(hoje) ? EstadoFatura.VENCIDA : EstadoFatura.FECHADA);
+      }
       fatura = faturaRepository.save(fatura);
 
       return new GerarFaturaResponse(true,
