@@ -1,6 +1,7 @@
 package br.autech.springrestapi.ScheduledTasks;
 
 import br.autech.springrestapi.model.Fatura;
+import br.autech.springrestapi.service.ExecucaoTarefaService;
 import br.autech.springrestapi.service.FaturaService;
 import br.autech.springrestapi.service.FileService;
 import br.autech.springrestapi.service.NcmService;
@@ -26,6 +27,7 @@ public class PagamentoTask {
    private final FileService fileService;
    private final WhatsAppService whatsAppService;
    private final FaturaService faturaService;
+   private final ExecucaoTarefaService execucaoTarefaService;
 
    private static final ZoneId BRASIL = ZoneId.of("America/Sao_Paulo");
 
@@ -41,6 +43,16 @@ public class PagamentoTask {
          return;
       }
       enviarAvisos("Fatura - Fechamento", fechadas, AvisoFatura.FECHAMENTO);
+   }
+
+   // Apaga o registro das execucoes alem do periodo de retencao
+   @Scheduled(cron = "0 30 5 * * *")
+   public void apagarExecucoesAntigas() {
+      try {
+         log.info("[Execucao tarefa - Limpeza] {} execucao(oes) apagada(s).", execucaoTarefaService.apagarAntigas());
+      } catch (Exception e) {
+         log.error("[Execucao tarefa - Limpeza] Erro: {}", e.getMessage(), e);
+      }
    }
 
    @Scheduled(cron = "0 10 5 * * *")

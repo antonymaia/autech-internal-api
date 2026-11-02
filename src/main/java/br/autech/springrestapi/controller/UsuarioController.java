@@ -30,7 +30,8 @@ public class UsuarioController {
     public ResponseEntity<LoginResponse> validarLogin(@RequestBody Usuario usuario){
         Usuario logado = usuarioService.login(usuario);
         return ResponseEntity.ok().body(new LoginResponse(logado.getId(), logado.getLogin(),
-                Boolean.TRUE.equals(logado.getPodePublicar()), tokenService.gerar(logado)));
+                Boolean.TRUE.equals(logado.getPodePublicar()), Boolean.TRUE.equals(logado.getPodeVerExecucoes()),
+                tokenService.gerar(logado)));
     }
 
     @RequestMapping(method = RequestMethod.GET)

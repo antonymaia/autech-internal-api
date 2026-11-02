@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -17,6 +18,14 @@ import java.util.Optional;
 public interface ClienteRepository extends JpaRepository<Cliente, String> {
 
    Optional<Cliente> findByCnpjCpf(String cnpjCpf);
+
+   interface NomeCliente {
+      String getCnpjCpf();
+      String getNome();
+   }
+
+   @Query("SELECT c.cnpjCpf AS cnpjCpf, c.nome AS nome FROM Cliente c WHERE c.cnpjCpf IN :cnpjs")
+   List<NomeCliente> buscarNomes(@Param("cnpjs") Collection<String> cnpjs);
 
    @Query(value = "select * from CLIENTES C where C.CNPJ_CPF like %:searchTerm% ", nativeQuery = true)
    Page<Cliente> searchByCnpjCpf(

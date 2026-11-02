@@ -24,6 +24,7 @@ class TokenServiceTest {
         assertEquals("7", claims.getSubject());
         assertEquals("fulano", claims.get("login", String.class));
         assertTrue(claims.get("publicar", Boolean.class));
+        assertFalse(claims.get("verExecucoes", Boolean.class));
     }
 
     @Test

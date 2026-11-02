@@ -47,6 +47,7 @@ public class SecurityConfig {
                 .authorizeRequests()
                 .antMatchers(HttpMethod.OPTIONS, "/**").permitAll() // 👈 preflight
                 .antMatchers("/downloads/**").hasAuthority(TokenFilter.PUBLICAR_DOWNLOADS)
+                .antMatchers("/execucoes-tarefa/**", "/logs/**").hasAuthority(TokenFilter.VER_EXECUCOES)
                 .anyRequest().permitAll();
 
         return http.build();

@@ -5,6 +5,8 @@ import br.autech.springrestapi.dtos.GerarFaturaResponse;
 import br.autech.springrestapi.model.*;
 import br.autech.springrestapi.model.enums.EstadoFatura;
 import br.autech.springrestapi.model.enums.StatusAssinatura;
+import br.autech.springrestapi.model.enums.TarefaAgendada;
+import br.autech.springrestapi.model.enums.TipoOcorrenciaExecucao;
 import br.autech.springrestapi.repository.ClienteRepository;
 import br.autech.springrestapi.repository.FaturaRepository;
 import br.autech.springrestapi.repository.PagamentoFaturaRepository;
@@ -64,6 +66,7 @@ public class FaturaService {
    private final TemplateBuilder templateBuilder;
    private final Environment environment;
    private final PlatformTransactionManager transactionManager;
+   private final ExecucaoTarefaService execucaoTarefaService;
 
    public static final int DIAS_FECHAMENTO = 3;
    public static final int DIAS_BLOQUEIO = 10;
@@ -71,6 +74,7 @@ public class FaturaService {
       List.of(EstadoFatura.FECHADA.getCod(), EstadoFatura.VENCIDA.getCod());
    private static final ZoneId BRASIL = ZoneId.of("America/Sao_Paulo");
    private static final DateTimeFormatter FORMATTER_BR = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+   private static final String MOTIVO_DIA_VENCIMENTO_INVALIDO = "DIA_VENCIMENTO_INVALIDO";
 
    public Fatura buscarPorId(Long id) {
       return faturaRepository.findById(id).orElseThrow(() -> {
@@ -89,6 +93,16 @@ public class FaturaService {
     * Retorna as faturas fechadas nesta execucao, para o envio do aviso de fechamento.
     */
    public List<Fatura> fecharFaturas() {
+      ExecucaoTarefa execucao = execucaoTarefaService.iniciar(TarefaAgendada.FECHAMENTO_FATURAS);
+      try {
+         return fecharFaturas(execucao);
+      } catch (RuntimeException e) {
+         execucaoTarefaService.falhar(execucao, e);
+         throw e;
+      }
+   }
+
+   private List<Fatura> fecharFaturas(ExecucaoTarefa execucao) {
       LocalDate hoje = LocalDate.now(BRASIL);
       LocalDate dataAlvo = hoje.plusDays(DIAS_FECHAMENTO);
 
@@ -102,25 +116,38 @@ public class FaturaService {
       TransactionTemplate tx = new TransactionTemplate(transactionManager);
       List<Fatura> fechadas = new ArrayList<>();
       int proximasGeradas = 0;
+      int erros = 0;
       Map<Razao, Integer> ignorados = new EnumMap<>(Razao.class);
 
+      // As ocorrencias sao gravadas aqui, fora do tx.execute: o rollback de um cliente nao pode apagar o registro
       for (String cnpjCpf : clientes) {
          try {
             ResultadoFechamento resultado = tx.execute(status -> processarFechamento(cnpjCpf, hoje, dataAlvo));
             if (resultado == null) continue;
             if (resultado.razao != null) {
                ignorados.merge(resultado.razao, 1, Integer::sum);
+               execucaoTarefaService.registrarOcorrencia(execucao, TipoOcorrenciaExecucao.IGNORADO, cnpjCpf,
+                  resultado.razao.name(), null);
                continue;
             }
             fechadas.addAll(resultado.fechadas);
             proximasGeradas += resultado.proximasGeradas;
+            for (String mensagem : resultado.proximasNaoGeradas) {
+               erros++;
+               execucaoTarefaService.registrarOcorrencia(execucao, TipoOcorrenciaExecucao.ERRO, cnpjCpf,
+                  MOTIVO_DIA_VENCIMENTO_INVALIDO, mensagem);
+            }
          } catch (Exception e) {
             log.error("[Fechar faturas] Erro no cliente {}: {}", cnpjCpf, e.getMessage(), e);
+            erros++;
+            execucaoTarefaService.registrarErro(execucao, cnpjCpf, e);
          }
       }
 
-      log.info("[Fechar faturas] Concluido. Fechadas={}, proximas geradas={}, ignorados={}",
-         fechadas.size(), proximasGeradas, ignorados);
+      log.info("[Fechar faturas] Concluido. Fechadas={}, proximas geradas={}, ignorados={}, erros={}",
+         fechadas.size(), proximasGeradas, ignorados, erros);
+      execucaoTarefaService.finalizar(execucao, fechadas.size(), proximasGeradas,
+         ignorados.values().stream().mapToInt(Integer::intValue).sum(), erros);
       return fechadas;
    }
 
@@ -147,6 +174,7 @@ public class FaturaService {
 
       List<Fatura> fechadas = new ArrayList<>();
       int proximasGeradas = 0;
+      List<String> proximasNaoGeradas = new ArrayList<>();
       for (Fatura fatura : aFechar) {
          fatura.setEstado(EstadoFatura.FECHADA);
          fechadas.add(faturaRepository.save(fatura));
@@ -154,6 +182,8 @@ public class FaturaService {
          if (dia == null) {
             log.warn("[Fechar faturas] Cliente {} com diaVencimento invalido ('{}'). Proxima fatura nao gerada.",
                cnpjCpf, cliente.getDiaVencimento());
+            proximasNaoGeradas.add("Fatura com vencimento em " + fatura.getDataVencimento().format(FORMATTER_BR)
+               + " fechada, mas a proxima nao foi gerada: diaVencimento invalido ('" + cliente.getDiaVencimento() + "')");
             continue;
          }
          LocalDate proximoVencimento = vencimentoNoMes(YearMonth.from(fatura.getDataVencimento()).plusMonths(1), dia);
@@ -162,7 +192,7 @@ public class FaturaService {
             proximasGeradas++;
          }
       }
-      return new ResultadoFechamento(null, fechadas, proximasGeradas);
+      return new ResultadoFechamento(null, fechadas, proximasGeradas, proximasNaoGeradas);
    }
 
    private Razao verificarElegibilidade(Cliente cliente) {
@@ -227,15 +257,17 @@ public class FaturaService {
       final Razao razao;
       final List<Fatura> fechadas;
       final int proximasGeradas;
+      final List<String> proximasNaoGeradas;
 
-      ResultadoFechamento(Razao razao, List<Fatura> fechadas, int proximasGeradas) {
+      ResultadoFechamento(Razao razao, List<Fatura> fechadas, int proximasGeradas, List<String> proximasNaoGeradas) {
          this.razao = razao;
          this.fechadas = fechadas;
          this.proximasGeradas = proximasGeradas;
+         this.proximasNaoGeradas = proximasNaoGeradas;
       }
 
       static ResultadoFechamento ignorado(Razao razao) {
-         return new ResultadoFechamento(razao, List.of(), 0);
+         return new ResultadoFechamento(razao, List.of(), 0, List.of());
       }
    }
 
