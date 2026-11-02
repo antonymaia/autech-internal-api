@@ -14,6 +14,7 @@ import br.autech.springrestapi.service.exception.ObjectNotFoundException;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,6 +39,7 @@ public class PortalService {
     private final PagamentoFaturaRepository pagamentoFaturaRepository;
     private final MercadoPagoService mercadoPagoService;
     private final FaturaService faturaService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional(readOnly = true)
     public ClientePortalDTO buscarDadosCliente(String cnpjCpf) {
@@ -233,6 +235,20 @@ public class PortalService {
         faturaRepository.save(fatura);
 
         faturaService.desbloquearSeQuitado(fatura.getCliente());
+
+        Cliente cliente = fatura.getCliente();
+        PagamentoConfirmadoEvent.PagamentoConfirmadoEventBuilder evento = PagamentoConfirmadoEvent.builder()
+                .faturaId(fatura.getId())
+                .valor(valor)
+                .dataPagamento(fatura.getDataPagamento());
+        if (cliente != null) {
+            evento.cnpjCpf(cliente.getCnpjCpf())
+                    .nomeCliente(cliente.getNome())
+                    .nomeResponsavel(cliente.getNomeResponsavel())
+                    .telefoneCliente(cliente.getTelefone())
+                    .clienteBloqueado("S".equalsIgnoreCase(cliente.getBloqueado()));
+        }
+        eventPublisher.publishEvent(evento.build());
     }
 
     // ---------- helpers ----------
