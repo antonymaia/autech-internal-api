@@ -11,7 +11,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
@@ -32,6 +35,7 @@ public class WhatsAppService {
    private static final Logger LOG_COBRANCA = LoggerFactory.getLogger("cobranca-whatsapp");
 
    private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+   private static final DateTimeFormatter FORMATTER_DATA_HORA = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
    private static final RestTemplate restTemplate = new RestTemplate();
    private static final ZoneId BRASIL = ZoneId.of("America/Sao_Paulo");
 
@@ -43,6 +47,8 @@ public class WhatsAppService {
    private String apiKey;
    @Value("${portal.url:https://pagar.autech.net.br}")
    private String portalUrl;
+   @Value("${whatsapp.aviso-pagamento.telefones:}")
+   private String telefonesAvisoPagamento;
 
    public enum AvisoFatura {
       FECHAMENTO("fechamento"),
@@ -148,6 +154,84 @@ public class WhatsAppService {
       if (!enviarAvisoFatura(fatura, aviso)) {
          throw new BadRequestException("Mensagem não enviada, verifique os dados do cliente");
       }
+   }
+
+   /**
+    * Avisa a AUTECH e o cliente que um PIX foi confirmado. Roda depois do commit e em outra
+    * thread: uma falha aqui vai para o log de cobranca e nao afeta a baixa da fatura.
+    */
+   @Async
+   @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+   public void enviarAvisoPagamento(PagamentoConfirmadoEvent evento) {
+      String valor = formatarValor(evento.getValor());
+
+      if (!isConfigurado()) {
+         LOG_COBRANCA.warn("[pagamento confirmado] WhatsApp Evolution API nao configurada. Fatura {} do cliente {} paga, Valor: {}",
+            evento.getFaturaId(), evento.getCnpjCpf(), valor);
+         return;
+      }
+
+      String contextoInterno = "aviso interno de pagamento";
+      if (telefonesAvisoPagamento.isBlank()) {
+         LOG_COBRANCA.warn("[{}] Nenhum numero configurado. Fatura {} do cliente {} paga, Valor: {}",
+            contextoInterno, evento.getFaturaId(), evento.getCnpjCpf(), valor);
+      } else {
+         String mensagem = montarMensagemPagamento(evento, valor);
+         for (String telefone : telefonesAvisoPagamento.split(",")) {
+            enviarMensagemPagamento(contextoInterno, telefone, mensagem, evento, valor);
+         }
+      }
+
+      enviarMensagemPagamento("confirmacao de pagamento ao cliente", evento.getTelefoneCliente(),
+         montarMensagemConfirmacaoCliente(evento, valor), evento, valor);
+   }
+
+   /** Cada destino e tentado por conta propria: uma falha nao impede o envio aos demais. */
+   private void enviarMensagemPagamento(String contexto, String telefone, String mensagem,
+                                        PagamentoConfirmadoEvent evento, String valor) {
+      String telefoneFormatado = normalizarTelefone(telefone);
+      if (telefoneFormatado == null) {
+         LOG_COBRANCA.warn("[{}] Telefone ausente ou invalido: '{}'. Fatura {} do cliente {} paga, Valor: {}",
+            contexto, telefone, evento.getFaturaId(), evento.getCnpjCpf(), valor);
+         return;
+      }
+
+      try {
+         ResponseEntity<String> response = doSend(telefoneFormatado, mensagem);
+         log.info("WhatsApp [{}] enviado para {} - fatura {} - status {}",
+            contexto, telefoneFormatado, evento.getFaturaId(), response.getStatusCode());
+      } catch (Exception e) {
+         LOG_COBRANCA.error("[{}] Falha ao enviar WhatsApp. Telefone: {}, Fatura: {}, Cliente: {}, Valor: {}, Erro: {}",
+            contexto, telefoneFormatado, evento.getFaturaId(), evento.getCnpjCpf(), valor, e.getMessage());
+      }
+   }
+
+   private String montarMensagemConfirmacaoCliente(PagamentoConfirmadoEvent evento, String valor) {
+      String nome = evento.getNomeResponsavel();
+      if (nome == null || nome.isBlank()) nome = evento.getNomeCliente();
+      String saudacao = nome == null || nome.isBlank() ? "Olá! 👋" : "Olá, " + nome + "! 👋";
+
+      String bloqueio = evento.isClienteBloqueado()
+         ? "⚠️ Seu sistema continua bloqueado porque ainda há outra fatura em atraso. "
+            + "Ele será desbloqueado automaticamente após o pagamento."
+         : "Caso seu sistema esteja bloqueado, ele será desbloqueado automaticamente.";
+
+      return saudacao + "\n\n"
+         + "✅ Recebemos o pagamento da sua fatura *AUTECH*.\n\n"
+         + "💰 Valor: *" + valor + "*\n"
+         + "🕒 Pago em: " + evento.getDataPagamento().format(FORMATTER_DATA_HORA) + "\n\n"
+         + bloqueio + "\n\n"
+         + "Obrigado! Dúvidas? Entre em contato conosco. 😊";
+   }
+
+   private String montarMensagemPagamento(PagamentoConfirmadoEvent evento, String valor) {
+      String nome = evento.getNomeCliente() != null ? evento.getNomeCliente() : "sem nome";
+      return "✅ *Pagamento PIX recebido*\n\n"
+         + "👤 Cliente: *" + nome + "*\n"
+         + "🪪 CPF/CNPJ: " + evento.getCnpjCpf() + "\n"
+         + "🧾 Fatura: *" + evento.getFaturaId() + "*\n"
+         + "💰 Valor: *" + valor + "*\n"
+         + "🕒 Pago em: " + evento.getDataPagamento().format(FORMATTER_DATA_HORA);
    }
 
    private String montarMensagem(AvisoFatura aviso, String nome, String cnpjCpf, String vencimento, String valor) {

@@ -17,5 +17,7 @@ services:
       - JWT_SECRET=${JWT_SECRET:-}
       # Pasta do nginx de downloads.autech.net.br, montada abaixo
       - DOWNLOADS_RAIZ=/downloads
+      # Numeros que recebem o aviso de PIX confirmado: vem do .env ao lado deste arquivo (ex.: 5581999999999,5581988888888)
+      - WHATSAPP_AVISO_PAGAMENTO_TELEFONES=${WHATSAPP_AVISO_PAGAMENTO_TELEFONES:-}
     volumes:
       - /var/www/downloads:/downloads

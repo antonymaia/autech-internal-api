@@ -74,6 +74,10 @@ spring.profiles.active=dev
 
 `PagamentoTask` (em `ScheduledTasks/`) executa geração de faturas e processamento de pagamentos automaticamente. `@EnableScheduling` está ativo na classe principal. O fechamento de faturas grava cada execução em `EXECUCAO_TAREFA` e `OCORRENCIA_EXECUCAO` (via `ExecucaoTarefaService`, retenção de 90 dias), consultadas em `GET /execucoes-tarefa`.
 
+## Aviso de pagamento
+
+Quando o webhook do Mercado Pago confirma um PIX, `PortalService.marcarFaturaPaga` publica `PagamentoConfirmadoEvent` e `WhatsAppService.enviarAvisoPagamento` avisa os números de `whatsapp.aviso-pagamento.telefones` (`WHATSAPP_AVISO_PAGAMENTO_TELEFONES`, separados por vírgula) e confirma o pagamento ao cliente no telefone do cadastro. A confirmação só promete o desbloqueio automático quando o cliente não ficou bloqueado depois da baixa (`FaturaService.desbloquearSeQuitado` mantém o bloqueio se houver outra fatura vencida há `DIAS_BLOQUEIO` dias ou mais). O envio roda depois do commit e em outra thread, então uma falha não desfaz a baixa da fatura.
+
 ## Email
 
 Configurado para SMTP Gmail (`smtp.gmail.com:587`). Templates HTML usam Thymeleaf via `TemplateBuilder`. Template `EmailLicencaVencida` notifica clientes com licença vencida.
