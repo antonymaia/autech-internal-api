@@ -10,5 +10,6 @@ public class LoginResponse {
     private Long id;
     private String login;
     private boolean podePublicar;
+    private boolean podeVerExecucoes;
     private String token;
 }

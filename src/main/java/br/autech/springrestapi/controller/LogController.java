@@ -1,5 +1,6 @@
 package br.autech.springrestapi.controller;
 
+import br.autech.springrestapi.service.exception.BadRequestException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
@@ -17,11 +18,14 @@ import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
+/** Log de cobrança do WhatsApp (nomes, telefones e valores). Exige o token de um usuário com PODE_VER_EXECUCOES (SecurityConfig). */
 @RestController
 @RequestMapping("/logs")
 public class LogController {
@@ -86,6 +90,15 @@ public class LogController {
         if (data == null || data.isBlank()) {
             return Paths.get(logDir, ARQUIVO_ATUAL);
         }
-        return Paths.get(logDir, PREFIXO_ROTACIONADO + data + ".log");
+        return Paths.get(logDir, PREFIXO_ROTACIONADO + validarData(data) + ".log");
+    }
+
+    // A data vira parte do caminho do arquivo: sem validar, "../" sairia da pasta de log.
+    private static String validarData(String data) {
+        try {
+            return LocalDate.parse(data).toString();
+        } catch (DateTimeParseException e) {
+            throw new BadRequestException("Data invalida, use o formato yyyy-MM-dd");
+        }
     }
 }

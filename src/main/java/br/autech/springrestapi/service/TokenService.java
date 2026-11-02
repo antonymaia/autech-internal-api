@@ -15,8 +15,8 @@ import java.security.Key;
 import java.util.Date;
 
 /**
- * Token (JWT) do login dos colaboradores. Leva o id, o login e se o usuário pode publicar arquivos no servidor de
- * downloads.
+ * Token (JWT) do login dos colaboradores. Leva o id, o login, se o usuário pode publicar arquivos no servidor de
+ * downloads e se pode consultar as execuções das tarefas agendadas.
  */
 @Slf4j
 @Service
@@ -45,6 +45,7 @@ public class TokenService {
                 .setSubject(String.valueOf(usuario.getId()))
                 .claim("login", usuario.getLogin())
                 .claim("publicar", Boolean.TRUE.equals(usuario.getPodePublicar()))
+                .claim("verExecucoes", Boolean.TRUE.equals(usuario.getPodeVerExecucoes()))
                 .setIssuedAt(agora)
                 .setExpiration(new Date(agora.getTime() + validadeMs))
                 .signWith(chave, SignatureAlgorithm.HS256)

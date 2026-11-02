@@ -36,8 +36,9 @@ public class UsuarioService {
        }
 
         usuario.setSenha(encoder.encode(usuario.getSenha()));
-        // A permissão de publicar só é dada pelo banco (fase4.sql), nunca por quem se cadastra.
+        // As permissões só são dadas pelo banco (fase4.sql e fase5.sql), nunca por quem se cadastra.
         usuario.setPodePublicar(false);
+        usuario.setPodeVerExecucoes(false);
        usuario.setCreatedAt(LocalDateTime.now());
         return usuarioRepository.save(usuario);
     }

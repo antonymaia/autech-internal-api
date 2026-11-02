@@ -15,6 +15,7 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -28,6 +29,7 @@ import java.util.List;
 public class TokenFilter extends OncePerRequestFilter {
 
     public static final String PUBLICAR_DOWNLOADS = "PUBLICAR_DOWNLOADS";
+    public static final String VER_EXECUCOES = "VER_EXECUCOES";
 
     private final TokenService tokenService;
 
@@ -38,9 +40,13 @@ public class TokenFilter extends OncePerRequestFilter {
         if (cabecalho != null && cabecalho.startsWith("Bearer ")) {
             Claims claims = tokenService.validar(cabecalho.substring(7));
             if (claims != null) {
-                List<GrantedAuthority> permissoes = Boolean.TRUE.equals(claims.get("publicar", Boolean.class))
-                        ? List.of(new SimpleGrantedAuthority(PUBLICAR_DOWNLOADS))
-                        : List.of();
+                List<GrantedAuthority> permissoes = new ArrayList<>();
+                if (Boolean.TRUE.equals(claims.get("publicar", Boolean.class))) {
+                    permissoes.add(new SimpleGrantedAuthority(PUBLICAR_DOWNLOADS));
+                }
+                if (Boolean.TRUE.equals(claims.get("verExecucoes", Boolean.class))) {
+                    permissoes.add(new SimpleGrantedAuthority(VER_EXECUCOES));
+                }
                 SecurityContextHolder.getContext().setAuthentication(
                         new UsernamePasswordAuthenticationToken(claims.get("login", String.class), null, permissoes));
             }

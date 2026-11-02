@@ -23,6 +23,9 @@ public class Usuario {
     /** Pode enviar e substituir arquivos no servidor de downloads. */
     @Column(name = "PODE_PUBLICAR")
     private Boolean podePublicar;
+    /** Pode consultar as execuções das tarefas agendadas e o log de cobrança. */
+    @Column(name = "PODE_VER_EXECUCOES")
+    private Boolean podeVerExecucoes;
     @Column(name = "CREATED_AT")
     private LocalDateTime createdAt;
     @Column(name = "UPDATED_AT")
