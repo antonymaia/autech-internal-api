@@ -57,7 +57,8 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         List<String> origens = new ArrayList<>(Arrays.asList(
                 "http://localhost:4200",
-                "https://admin.autech.net.br"
+                "https://autech.net.br",
+                "https://*.autech.net.br"
         ));
         if (portalCorsOrigin != null && !portalCorsOrigin.isBlank()) {
             for (String o : portalCorsOrigin.split(",")) {
@@ -67,7 +68,7 @@ public class SecurityConfig {
         }
 
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(origens);
+        config.setAllowedOriginPatterns(origens);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
