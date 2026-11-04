@@ -15,4 +15,5 @@ public class HomePageData {
    private Integer qtdeClientesAtivos;
    private Integer qtdeClientesBloqueados;
    private BigDecimal rendaAtual;
+   private BigDecimal arrecadacaoMes;
 }
