@@ -35,17 +35,16 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 
         http
-                .cors()   // 👈 MUITO IMPORTANTE
+                .cors()
                 .and()
                 .csrf().disable()
                 .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 .and()
-                // Sem token: 401. Com token, mas sem a permissão: 403 (padrão do Spring).
                 .exceptionHandling().authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
                 .and()
                 .addFilterBefore(new TokenFilter(tokenService), UsernamePasswordAuthenticationFilter.class)
                 .authorizeRequests()
-                .antMatchers(HttpMethod.OPTIONS, "/**").permitAll() // 👈 preflight
+                .antMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .antMatchers("/downloads/**").hasAuthority(TokenFilter.PUBLICAR_DOWNLOADS)
                 .antMatchers("/execucoes-tarefa/**", "/logs/**").hasAuthority(TokenFilter.VER_EXECUCOES)
                 .anyRequest().permitAll();
