@@ -236,19 +236,8 @@ public class PortalService {
 
         faturaService.desbloquearSeQuitado(fatura.getCliente());
 
-        Cliente cliente = fatura.getCliente();
-        PagamentoConfirmadoEvent.PagamentoConfirmadoEventBuilder evento = PagamentoConfirmadoEvent.builder()
-                .faturaId(fatura.getId())
-                .valor(valor)
-                .dataPagamento(fatura.getDataPagamento());
-        if (cliente != null) {
-            evento.cnpjCpf(cliente.getCnpjCpf())
-                    .nomeCliente(cliente.getNome())
-                    .nomeResponsavel(cliente.getNomeResponsavel())
-                    .telefoneCliente(cliente.getTelefone())
-                    .clienteBloqueado("S".equalsIgnoreCase(cliente.getBloqueado()));
-        }
-        eventPublisher.publishEvent(evento.build());
+        eventPublisher.publishEvent(
+                PagamentoConfirmadoEvent.de(fatura, pagSalvo, PagamentoConfirmadoEvent.Origem.MERCADO_PAGO));
     }
 
     // ---------- helpers ----------

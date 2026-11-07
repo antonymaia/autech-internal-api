@@ -91,6 +91,8 @@ class PortalServiceWebhookTest {
         assertEquals("81977776666", evento.getTelefoneCliente());
         assertEquals(new BigDecimal("135.90"), evento.getValor());
         assertNotNull(evento.getDataPagamento());
+        assertEquals(PagamentoConfirmadoEvent.Origem.MERCADO_PAGO, evento.getOrigem());
+        assertEquals("PIX", evento.getFormaPagamento());
     }
 
     private PagamentoConfirmadoEvent eventoPublicado() {

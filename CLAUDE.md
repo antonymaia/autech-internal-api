@@ -76,7 +76,7 @@ spring.profiles.active=dev
 
 ## Aviso de pagamento
 
-Quando o webhook do Mercado Pago confirma um PIX, `PortalService.marcarFaturaPaga` publica `PagamentoConfirmadoEvent` e `WhatsAppService.enviarAvisoPagamento` avisa os números de `whatsapp.aviso-pagamento.telefones` (`WHATSAPP_AVISO_PAGAMENTO_TELEFONES`, separados por vírgula) e confirma o pagamento ao cliente no telefone do cadastro. A confirmação só promete o desbloqueio automático quando o cliente não ficou bloqueado depois da baixa (`FaturaService.desbloquearSeQuitado` mantém o bloqueio se houver outra fatura vencida há `DIAS_BLOQUEIO` dias ou mais). O envio roda depois do commit e em outra thread, então uma falha não desfaz a baixa da fatura.
+Quando o webhook do Mercado Pago confirma um PIX, `PortalService.marcarFaturaPaga` publica `PagamentoConfirmadoEvent` e `WhatsAppService.enviarAvisoPagamento` avisa os números de `whatsapp.aviso-pagamento.telefones` (`WHATSAPP_AVISO_PAGAMENTO_TELEFONES`, separados por vírgula) e confirma o pagamento ao cliente no telefone do cadastro. A confirmação só promete o desbloqueio automático quando o cliente não ficou bloqueado depois da baixa (`FaturaService.desbloquearSeQuitado` mantém o bloqueio se houver outra fatura vencida há `DIAS_BLOQUEIO` dias ou mais). A baixa manual (`FaturaService.adicionarPagamento`) publica o mesmo evento com `Origem.MANUAL`: os números internos são avisados (com origem e forma de pagamento) e o cliente também recebe a confirmação. O envio roda depois do commit e em outra thread, então uma falha não desfaz a baixa da fatura.
 
 ## Email
 

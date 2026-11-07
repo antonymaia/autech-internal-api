@@ -157,8 +157,9 @@ public class WhatsAppService {
    }
 
    /**
-    * Avisa a AUTECH e o cliente que um PIX foi confirmado. Roda depois do commit e em outra
-    * thread: uma falha aqui vai para o log de cobranca e nao afeta a baixa da fatura.
+    * Avisa a AUTECH e o cliente que uma fatura foi paga (PIX do Mercado Pago ou baixa manual).
+    * Roda depois do commit e em outra thread: uma falha aqui vai para o log de cobranca e nao
+    * afeta a baixa da fatura.
     */
    @Async
    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -226,7 +227,15 @@ public class WhatsAppService {
 
    private String montarMensagemPagamento(PagamentoConfirmadoEvent evento, String valor) {
       String nome = evento.getNomeCliente() != null ? evento.getNomeCliente() : "sem nome";
-      return "✅ *Pagamento PIX recebido*\n\n"
+      String titulo = evento.getOrigem() == PagamentoConfirmadoEvent.Origem.MANUAL
+         ? "📝 *Pagamento informado manualmente*"
+         : "✅ *Pagamento recebido pelo Mercado Pago*";
+      String origem = evento.getOrigem() == PagamentoConfirmadoEvent.Origem.MANUAL
+         ? "Baixa manual"
+         : "Mercado Pago";
+      return titulo + "\n\n"
+         + "🏦 Origem: *" + origem + "*\n"
+         + "💳 Forma: *" + evento.getFormaPagamento() + "*\n"
          + "👤 Cliente: *" + nome + "*\n"
          + "🪪 CPF/CNPJ: " + evento.getCnpjCpf() + "\n"
          + "🧾 Fatura: *" + evento.getFaturaId() + "*\n"

@@ -131,7 +131,9 @@ class WhatsAppServiceAvisoPagamentoTest {
             .nomeResponsavel("Maria")
             .telefoneCliente(TELEFONE_CLIENTE)
             .valor(new BigDecimal("135.9"))
-            .dataPagamento(LocalDateTime.of(2026, 11, 2, 14, 35));
+            .dataPagamento(LocalDateTime.of(2026, 11, 2, 14, 35))
+            .origem(PagamentoConfirmadoEvent.Origem.MERCADO_PAGO)
+            .formaPagamento("PIX");
     }
 
     private String corpoPara(String telefone) {
@@ -155,7 +157,9 @@ class WhatsAppServiceAvisoPagamentoTest {
 
         for (String telefone : List.of(TELEFONE_1, TELEFONE_2)) {
             String interno = corpoPara(telefone);
-            assertTrue(interno.contains("Pagamento PIX recebido"), interno);
+            assertTrue(interno.contains("Pagamento recebido pelo Mercado Pago"), interno);
+            assertTrue(interno.contains("Origem: *Mercado Pago*"), interno);
+            assertTrue(interno.contains("Forma: *PIX*"), interno);
             assertTrue(interno.contains("Mercado Bom Preco"), interno);
             assertTrue(interno.contains("12345678000199"), interno);
             assertTrue(interno.contains("*42*"), interno);
@@ -168,6 +172,27 @@ class WhatsAppServiceAvisoPagamentoTest {
         assertTrue(cliente.contains("Recebemos o pagamento"), cliente);
         assertTrue(cliente.contains("R$ 135,90"), cliente);
         assertTrue(cliente.contains("Caso seu sistema esteja bloqueado"), cliente);
+    }
+
+    @Test
+    void baixaManualAvisaOsNumerosComAFormaEConfirmaAoCliente() {
+        whatsAppService.enviarAvisoPagamento(evento()
+            .origem(PagamentoConfirmadoEvent.Origem.MANUAL)
+            .formaPagamento("Dinheiro")
+            .build());
+
+        assertEquals(3, enviados.size());
+        for (String telefone : List.of(TELEFONE_1, TELEFONE_2)) {
+            String interno = corpoPara(telefone);
+            assertTrue(interno.contains("Pagamento informado manualmente"), interno);
+            assertTrue(interno.contains("Origem: *Baixa manual*"), interno);
+            assertTrue(interno.contains("Forma: *Dinheiro*"), interno);
+            assertFalse(interno.contains("Mercado Pago"), interno);
+        }
+
+        String cliente = corpoPara(TELEFONE_CLIENTE);
+        assertTrue(cliente.contains("Recebemos o pagamento"), cliente);
+        assertTrue(cliente.contains("R$ 135,90"), cliente);
     }
 
     @Test
