@@ -18,6 +18,7 @@ import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.env.Environment;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
@@ -67,6 +68,7 @@ public class FaturaService {
    private final Environment environment;
    private final PlatformTransactionManager transactionManager;
    private final ExecucaoTarefaService execucaoTarefaService;
+   private final ApplicationEventPublisher eventPublisher;
 
    public static final int DIAS_FECHAMENTO = 3;
    public static final int DIAS_BLOQUEIO = 10;
@@ -499,6 +501,9 @@ public class FaturaService {
       fatura = faturaRepository.save(fatura);
 
       desbloquearSeQuitado(fatura.getCliente());
+
+      eventPublisher.publishEvent(
+         PagamentoConfirmadoEvent.de(fatura, pagamento, PagamentoConfirmadoEvent.Origem.MANUAL));
       return fatura;
    }
 
