@@ -1,5 +1,6 @@
 package br.autech.springrestapi.service;
 
+import br.autech.springrestapi.dtos.CobrancaLoteDTO;
 import br.autech.springrestapi.model.Cliente;
 import br.autech.springrestapi.model.Fatura;
 import br.autech.springrestapi.model.enums.EstadoFatura;
@@ -13,6 +14,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.web.client.RestTemplate;
@@ -22,9 +24,12 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @Slf4j
 @Service
@@ -38,6 +43,12 @@ public class WhatsAppService {
    private static final DateTimeFormatter FORMATTER_DATA_HORA = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
    private static final RestTemplate restTemplate = new RestTemplate();
    private static final ZoneId BRASIL = ZoneId.of("America/Sao_Paulo");
+   /** Estados que o envio manual (e a cobranca em lote) considera pendentes. */
+   private static final List<Integer> ESTADOS_COBRANCA_MANUAL =
+      List.of(EstadoFatura.FECHADA.getCod(), EstadoFatura.VENCIDA.getCod(), EstadoFatura.ABERTA.getCod());
+
+   /** Cobranca em lote: fatura vencendo amanha, vencendo hoje ou ja vencida. */
+   public enum TipoCobrancaLote { AMANHA, HOJE, VENCIDA }
 
    @Value("${whatsapp.evolution.base-url:}")
    private String baseUrl;
@@ -134,16 +145,11 @@ public class WhatsAppService {
    }
 
    /**
-    * Envio manual: cobra a fatura pendente (fechada ou vencida) mais antiga do cliente.
+    * Envio manual: cobra a fatura pendente (aberta, fechada ou vencida) mais antiga do cliente.
     */
    public void enviarMensagemCobranca(String cnpjCpf) {
-      List<Fatura> pendentes = faturaRepository.findAllByCliente_CnpjCpfAndEstadoInOrderByDataVencimento(
-         cnpjCpf, List.of(EstadoFatura.FECHADA.getCod(), EstadoFatura.VENCIDA.getCod(), EstadoFatura.ABERTA.getCod()));
-      if (pendentes.isEmpty()) {
-         throw new BadRequestException("Mensagem não enviada, cliente não possui fatura pendente");
-      }
-
-      Fatura fatura = pendentes.get(0);
+      Fatura fatura = faturaCobradaNoEnvioManual(cnpjCpf)
+         .orElseThrow(() -> new BadRequestException("Mensagem não enviada, cliente não possui fatura pendente"));
       LocalDate hoje = LocalDate.now(BRASIL);
       AvisoFatura aviso;
       if (fatura.getDataVencimento().isBefore(hoje)) aviso = AvisoFatura.ATRASO;
@@ -154,6 +160,74 @@ public class WhatsAppService {
       if (!enviarAvisoFatura(fatura, aviso)) {
          throw new BadRequestException("Mensagem não enviada, verifique os dados do cliente");
       }
+   }
+
+   /** A fatura que o envio manual cobra: a pendente mais antiga do cliente. */
+   private Optional<Fatura> faturaCobradaNoEnvioManual(String cnpjCpf) {
+      return faturaRepository.findAllByCliente_CnpjCpfAndEstadoInOrderByDataVencimento(cnpjCpf, ESTADOS_COBRANCA_MANUAL)
+         .stream().findFirst();
+   }
+
+   /**
+    * Clientes para a cobranca em lote. Entra quem esta ativo e tem como fatura pendente mais antiga (a que o envio
+    * manual cobra) uma que vence amanha, hoje ou que ja venceu, conforme o tipo: assim cada um recebe a mensagem
+    * certa. Quem tem fatura na data mas uma anterior em aberto, ou nao tem telefone valido, volta separado.
+    */
+   @Transactional(readOnly = true)
+   public CobrancaLoteDTO listarCobrancaLote(TipoCobrancaLote tipo) {
+      LocalDate hoje = LocalDate.now(BRASIL);
+      LocalDate alvo = tipo == TipoCobrancaLote.AMANHA ? hoje.plusDays(1) : hoje;
+
+      List<Fatura> candidatas = tipo == TipoCobrancaLote.VENCIDA
+         ? faturaRepository.findAllByDataVencimentoLessThanEqualAndEstadoIn(hoje.minusDays(1), ESTADOS_COBRANCA_MANUAL)
+         : faturaRepository.findAllByDataVencimentoAndEstadoIn(alvo, ESTADOS_COBRANCA_MANUAL);
+
+      Map<String, Cliente> clientes = new LinkedHashMap<>();
+      for (Fatura fatura : candidatas) {
+         Cliente cliente = fatura.getCliente();
+         if (cliente != null && "S".equalsIgnoreCase(cliente.getAtivo())) clientes.putIfAbsent(cliente.getCnpjCpf(), cliente);
+      }
+
+      CobrancaLoteDTO resposta = new CobrancaLoteDTO(alvo);
+      for (Cliente cliente : clientes.values()) {
+         Optional<Fatura> cobrada = faturaCobradaNoEnvioManual(cliente.getCnpjCpf());
+         if (cobrada.isEmpty() || cobrada.get().getDataVencimento() == null) continue;
+         Fatura fatura = cobrada.get();
+         String nome = nomeParaLista(cliente);
+
+         boolean naData = tipo == TipoCobrancaLote.VENCIDA
+            ? fatura.getDataVencimento().isBefore(hoje)
+            : fatura.getDataVencimento().isEqual(alvo);
+         if (!naData) {
+            resposta.getComFaturaAnterior().add(new CobrancaLoteDTO.ClienteForaDaCobranca(cliente.getCnpjCpf(), nome,
+               "Fatura de " + fatura.getDataVencimento().format(FORMATTER) + " em aberto"));
+            continue;
+         }
+
+         if (normalizarTelefone(cliente.getTelefone()) == null) {
+            String motivo = cliente.getTelefone() == null || cliente.getTelefone().isBlank()
+               ? "Sem telefone no cadastro"
+               : "Telefone inválido: " + cliente.getTelefone();
+            resposta.getSemTelefone().add(new CobrancaLoteDTO.ClienteForaDaCobranca(cliente.getCnpjCpf(), nome, motivo));
+            continue;
+         }
+
+         resposta.getClientes().add(new CobrancaLoteDTO.Cliente(cliente.getCnpjCpf(), nome, cliente.getTelefone(),
+            fatura.getId(), fatura.getDataVencimento(), fatura.getValor(),
+            Math.max(0, ChronoUnit.DAYS.between(fatura.getDataVencimento(), hoje))));
+      }
+
+      Comparator<String> porNome = Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER);
+      resposta.getClientes().sort(Comparator.comparing(CobrancaLoteDTO.Cliente::getNome, porNome));
+      resposta.getComFaturaAnterior().sort(Comparator.comparing(CobrancaLoteDTO.ClienteForaDaCobranca::getNome, porNome));
+      resposta.getSemTelefone().sort(Comparator.comparing(CobrancaLoteDTO.ClienteForaDaCobranca::getNome, porNome));
+      return resposta;
+   }
+
+   private String nomeParaLista(Cliente cliente) {
+      if (cliente.getNome() != null && !cliente.getNome().isBlank()) return cliente.getNome();
+      if (cliente.getRazaoSocialNome() != null && !cliente.getRazaoSocialNome().isBlank()) return cliente.getRazaoSocialNome();
+      return cliente.getCnpjCpf();
    }
 
    /**
