@@ -172,6 +172,8 @@ class WhatsAppServiceAvisoPagamentoTest {
         assertTrue(cliente.contains("Recebemos o pagamento"), cliente);
         assertTrue(cliente.contains("R$ 135,90"), cliente);
         assertTrue(cliente.contains("Caso seu sistema esteja bloqueado"), cliente);
+        assertFalse(cliente.contains("Pago em"), cliente);
+        assertFalse(cliente.contains("02/11/2026"), cliente);
     }
 
     @Test

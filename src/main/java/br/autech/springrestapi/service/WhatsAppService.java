@@ -65,7 +65,7 @@ public class WhatsAppService {
       FECHAMENTO("fechamento"),
       VESPERA("1 dia antes"),
       DIA_VENCIMENTO("dia do vencimento"),
-      ATRASO("2 dias apos o vencimento");
+      ATRASO("fatura vencida");
 
       private final String contexto;
 
@@ -293,8 +293,7 @@ public class WhatsAppService {
 
       return saudacao + "\n\n"
          + "✅ Recebemos o pagamento da sua fatura *AUTECH*.\n\n"
-         + "💰 Valor: *" + valor + "*\n"
-         + "🕒 Pago em: " + evento.getDataPagamento().format(FORMATTER_DATA_HORA) + "\n\n"
+         + "💰 Valor: *" + valor + "*\n\n"
          + bloqueio + "\n\n"
          + "Obrigado! Dúvidas? Entre em contato conosco. 😊";
    }

@@ -41,6 +41,7 @@ import java.time.YearMonth;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -51,6 +52,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -238,6 +240,14 @@ public class FaturaService {
     */
    public List<Fatura> buscarPendentesComVencimentoEm(LocalDate dataVencimento) {
       return faturaRepository.findAllByDataVencimentoAndEstadoIn(dataVencimento, ESTADOS_PENDENTES);
+   }
+
+   /** Faturas pendentes com vencimento anterior a hoje, da mais antiga para a mais recente. */
+   public List<Fatura> buscarPendentesVencidas() {
+      LocalDate ontem = LocalDate.now(BRASIL).minusDays(1);
+      return faturaRepository.findAllByDataVencimentoLessThanEqualAndEstadoIn(ontem, ESTADOS_PENDENTES).stream()
+         .sorted(Comparator.comparing(Fatura::getDataVencimento))
+         .collect(Collectors.toList());
    }
 
    /**
