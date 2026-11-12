@@ -1,1 +1,1 @@
-2026-08-08 06:30:00.105 WARN  - [1 dia antes] Cliente 41073728000120 (MONICA PATRICIA DIMAS DE ALMEIDA 01191404463) sem valorMensalidade. Mensagem nao enviada. Vencimento: 09/08/2026, Telefone: 34285528
+2026-11-09 08:17:21.333 ERROR - [1 dia antes] Falha ao enviar WhatsApp. Cliente: 38495943000105 (SN), Telefone: 5581900000000, Fatura: 134, Vencimento: 10/11/2026, Valor: R$ 170,00, Erro: 400 Bad Request: "{"status":400,"error":"Bad Request","response":{"message":[{"jid":"5581900000000@s.whatsapp.net","exists":false,"number":"5581900000000"}]}}"

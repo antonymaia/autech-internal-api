@@ -91,10 +91,9 @@ public class PagamentoTask {
    }
 
    @Scheduled(cron = "0 0 7 * * *")
-   public void enviarAvisosCobranca2DiasApos() {
-      LocalDate anteontem = LocalDate.now(BRASIL).minusDays(2);
-      enviarAvisos("WhatsApp - Aviso 2 dias apos o vencimento",
-         faturaService.buscarPendentesComVencimentoEm(anteontem), AvisoFatura.ATRASO);
+   public void enviarAvisosCobrancaFaturasVencidas() {
+      enviarAvisos("WhatsApp - Aviso de fatura vencida",
+         faturaService.buscarPendentesVencidas(), AvisoFatura.ATRASO);
    }
 
    // Rele cada fatura antes de enviar: se foi paga nesse meio tempo, nao manda
