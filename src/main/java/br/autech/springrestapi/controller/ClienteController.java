@@ -3,7 +3,9 @@ package br.autech.springrestapi.controller;
 import br.autech.springrestapi.dtos.ClienteDTO;
 import br.autech.springrestapi.dtos.ClienteNovoDTO;
 import br.autech.springrestapi.model.Cliente;
+import br.autech.springrestapi.dtos.ClienteDevedorDTO;
 import br.autech.springrestapi.service.ClienteService;
+import br.autech.springrestapi.service.FaturaService;
 import org.springframework.beans.BeanUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
@@ -20,8 +22,11 @@ public class ClienteController {
 
     private final ClienteService clienteService;
 
-    public ClienteController(ClienteService clienteService) {
+    private final FaturaService faturaService;
+
+    public ClienteController(ClienteService clienteService, FaturaService faturaService) {
         this.clienteService = clienteService;
+        this.faturaService = faturaService;
     }
 
     @RequestMapping(method = RequestMethod.GET)
@@ -33,6 +38,12 @@ public class ClienteController {
     @RequestMapping(value = "/{cnpjCpf}", method = RequestMethod.GET)
     public ResponseEntity<Cliente> findByCnpjCpf(@PathVariable String cnpjCpf){
         return ResponseEntity.ok().body(clienteService.findByCnpjCpf(cnpjCpf));
+    }
+
+    /** Todos os clientes com fatura vencida e nao paga, ativos ou nao. */
+    @GetMapping("/devedores")
+    public ResponseEntity<List<ClienteDevedorDTO>> listarDevedores(){
+        return ResponseEntity.ok().body(faturaService.listarClientesDevedores());
     }
 
     @RequestMapping(value = "/search", method = RequestMethod.GET)
