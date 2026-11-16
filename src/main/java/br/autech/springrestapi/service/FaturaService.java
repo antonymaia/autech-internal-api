@@ -1,6 +1,7 @@
 package br.autech.springrestapi.service;
 
 import br.autech.springrestapi.dtos.ClienteDTO;
+import br.autech.springrestapi.dtos.ClienteDevedorDTO;
 import br.autech.springrestapi.dtos.GerarFaturaResponse;
 import br.autech.springrestapi.model.*;
 import br.autech.springrestapi.model.enums.EstadoFatura;
@@ -40,6 +41,8 @@ import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
+import java.util.LinkedHashMap;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
@@ -248,6 +251,51 @@ public class FaturaService {
       return faturaRepository.findAllByDataVencimentoLessThanEqualAndEstadoIn(ontem, ESTADOS_PENDENTES).stream()
          .sorted(Comparator.comparing(Fatura::getDataVencimento))
          .collect(Collectors.toList());
+   }
+
+   /**
+    * Clientes devendo: quem tem fatura pendente (fechada ou vencida) com vencimento anterior a hoje.
+    * Cada cliente vem com o total devido e as faturas em atraso; a lista comeca por quem deve ha mais tempo.
+    * Vem todo mundo, inclusive cliente inativo que ficou devendo.
+    */
+   @Transactional(readOnly = true)
+   public List<ClienteDevedorDTO> listarClientesDevedores() {
+      LocalDate hoje = LocalDate.now(BRASIL);
+
+      Map<String, ClienteDevedorDTO> devedores = new LinkedHashMap<>();
+      for (Fatura fatura : buscarPendentesVencidas()) {
+         Cliente cliente = fatura.getCliente();
+         if (cliente == null) continue;
+
+         ClienteDevedorDTO devedor = devedores.computeIfAbsent(cliente.getCnpjCpf(), chave -> {
+            ClienteDevedorDTO novo = new ClienteDevedorDTO();
+            novo.setCnpjCpf(cliente.getCnpjCpf());
+            novo.setNome(nomeParaLista(cliente));
+            novo.setTelefone(cliente.getTelefone());
+            novo.setAtivo(cliente.getAtivo());
+            novo.setBloqueado(cliente.getBloqueado());
+            // As faturas chegam da mais antiga para a mais recente: a primeira do cliente e a mais atrasada
+            novo.setVencimentoMaisAntigo(fatura.getDataVencimento());
+            novo.setDiasAtraso(ChronoUnit.DAYS.between(fatura.getDataVencimento(), hoje));
+            return novo;
+         });
+
+         devedor.getFaturas().add(new ClienteDevedorDTO.FaturaDevida(fatura.getId(), fatura.getDataVencimento(),
+            fatura.getValor(), ChronoUnit.DAYS.between(fatura.getDataVencimento(), hoje)));
+         devedor.setQuantidadeFaturas(devedor.getFaturas().size());
+         if (fatura.getValor() != null) devedor.setValorTotal(devedor.getValorTotal().add(fatura.getValor()));
+      }
+
+      List<ClienteDevedorDTO> resposta = new ArrayList<>(devedores.values());
+      resposta.sort(Comparator.comparing(ClienteDevedorDTO::getVencimentoMaisAntigo)
+         .thenComparing(ClienteDevedorDTO::getNome, String.CASE_INSENSITIVE_ORDER));
+      return resposta;
+   }
+
+   private String nomeParaLista(Cliente cliente) {
+      if (cliente.getNome() != null && !cliente.getNome().isBlank()) return cliente.getNome();
+      if (cliente.getRazaoSocialNome() != null && !cliente.getRazaoSocialNome().isBlank()) return cliente.getRazaoSocialNome();
+      return cliente.getCnpjCpf();
    }
 
    /**
