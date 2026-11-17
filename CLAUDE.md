@@ -72,7 +72,7 @@ spring.profiles.active=dev
 
 ## Tarefas Agendadas
 
-`PagamentoTask` (em `ScheduledTasks/`) executa geração de faturas e processamento de pagamentos automaticamente. `@EnableScheduling` está ativo na classe principal. O fechamento de faturas grava cada execução em `EXECUCAO_TAREFA` e `OCORRENCIA_EXECUCAO` (via `ExecucaoTarefaService`, retenção de 90 dias), consultadas em `GET /execucoes-tarefa`.
+`PagamentoTask` (em `ScheduledTasks/`) executa geração de faturas e processamento de pagamentos automaticamente. O `@EnableScheduling` fica em `config/SchedulingConfig` e só liga com `tarefas.agendadas.habilitadas=true`, definido apenas em `application-prod.properties`: em dev o banco e a Evolution API são os de produção, e uma instância local rodando os jobs mandaria cobranças duplicadas aos clientes. O fechamento de faturas grava cada execução em `EXECUCAO_TAREFA` e `OCORRENCIA_EXECUCAO` (via `ExecucaoTarefaService`, retenção de 90 dias), consultadas em `GET /execucoes-tarefa`.
 
 ## Aviso de pagamento
 
