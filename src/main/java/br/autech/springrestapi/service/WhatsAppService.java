@@ -331,8 +331,7 @@ public class WhatsAppService {
             break;
          default:
             abertura = "Identificamos que sua fatura *AUTECH* ainda está *em aberto*.";
-            fechamento = "Evite a interrupção do serviço regularizando o pagamento. "
-               + "Se já pagou, desconsidere esta mensagem.\n\n";
+            fechamento = "";
       }
 
       return "Olá, " + nome + "! 👋\n\n"
