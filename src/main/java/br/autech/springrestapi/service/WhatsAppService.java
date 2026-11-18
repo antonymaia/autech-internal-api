@@ -338,9 +338,9 @@ public class WhatsAppService {
          + abertura + "\n\n"
          + "📅 Vencimento: *" + vencimento + "*\n"
          + "💰 Valor: *" + valor + "*\n\n"
-         + "Para pagar via PIX, acesse o portal e informe seu CPF/CNPJ:\n"
-         + cnpjCpf + "\n\n"
-         + "👉 " + portalUrl + "\n\n"
+         + "👉 *Toque no link para ver sua fatura e gerar o PIX:*\n"
+         + portalUrl + "/login#" + cnpjCpf + "\n\n"
+         + "⚠️ Pague somente pelo código PIX gerado no portal.\n\n"
          + fechamento
          + "Dúvidas? Entre em contato conosco. 😊";
    }
