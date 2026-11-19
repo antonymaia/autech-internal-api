@@ -1,6 +1,7 @@
 package br.autech.springrestapi.repository;
 
 import br.autech.springrestapi.dtos.ClienteDTO;
+import br.autech.springrestapi.dtos.ClienteNuvemDTO;
 import br.autech.springrestapi.model.Cliente;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -238,6 +239,12 @@ public interface ClienteRepository extends JpaRepository<Cliente, String> {
       "   FUNCTION('REPLACE', FUNCTION('REPLACE', c.telefone, '(', ''), ')', ''), '-', ''), ' ', ''), '.', ''), '+', '')" +
       "   LIKE :termoBusca ")
    Page<ClienteDTO> buscarClienteDtoPorTelefone(String termoBusca, Pageable pageable);
+
+   @Query(value = "" +
+      " SELECT new br.autech.springrestapi.dtos.ClienteNuvemDTO(" +
+      " c.cnpjCpf, c.nome" +
+      ") FROM Cliente c WHERE c.clienteNuvem = 'S' ORDER BY c.nome ")
+   List<ClienteNuvemDTO> buscarClientesNuvem();
 
    @Query(value = "SELECT COUNT(c.cnpjCpf) FROM Cliente c WHERE c.ativo = 'S' AND c.bloqueado = 'N' ")
    Integer numberActiveCostomers();

@@ -19,5 +19,8 @@ services:
       - DOWNLOADS_RAIZ=/downloads
       # Numeros que recebem o aviso de PIX confirmado: vem do .env ao lado deste arquivo (ex.: 5581999999999,5581988888888)
       - WHATSAPP_AVISO_PAGAMENTO_TELEFONES=${WHATSAPP_AVISO_PAGAMENTO_TELEFONES:-}
+      # Chaves dos consumidores sem login (cabecalho X-API-Key): vem do .env ao lado deste arquivo
+      # (API_CHAVES=nuvem:<chave>,app-local:<chave>, cada chave com openssl rand -hex 32)
+      - API_CHAVES=${API_CHAVES:-}
     volumes:
       - /var/www/downloads:/downloads
