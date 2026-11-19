@@ -29,6 +29,8 @@ public class ClienteNovoDTO implements Serializable {
     private String numeroEndereco;
     private String complementoEndereco;
     private Endereco endereco;
+    /** 'S' ou 'N'; se não vier, o cliente é cadastrado como 'N'. */
+    private String clienteNuvem;
 
     public ClienteNovoDTO(){}
 }

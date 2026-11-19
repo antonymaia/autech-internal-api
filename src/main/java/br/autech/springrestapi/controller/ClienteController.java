@@ -2,6 +2,7 @@ package br.autech.springrestapi.controller;
 
 import br.autech.springrestapi.dtos.ClienteDTO;
 import br.autech.springrestapi.dtos.ClienteNovoDTO;
+import br.autech.springrestapi.dtos.ClienteNuvemDTO;
 import br.autech.springrestapi.model.Cliente;
 import br.autech.springrestapi.dtos.ClienteDevedorDTO;
 import br.autech.springrestapi.service.ClienteService;
@@ -44,6 +45,12 @@ public class ClienteController {
     @GetMapping("/devedores")
     public ResponseEntity<List<ClienteDevedorDTO>> listarDevedores(){
         return ResponseEntity.ok().body(faturaService.listarClientesDevedores());
+    }
+
+    /** Clientes que usam o sistema nuvem (CLIENTE_NUVEM = 'S'), consumido pela API do sistema nuvem. */
+    @GetMapping("/nuvem")
+    public ResponseEntity<List<ClienteNuvemDTO>> listarClientesNuvem(){
+        return ResponseEntity.ok().body(clienteService.listarClientesNuvem());
     }
 
     @RequestMapping(value = "/search", method = RequestMethod.GET)

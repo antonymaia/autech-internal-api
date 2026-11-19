@@ -31,6 +31,9 @@ public class SecurityConfig {
     @Value("${portal.cors.origin:}")
     private String portalCorsOrigin;
 
+    @Value("${api.chaves:}")
+    private String apiChaves;
+
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 
@@ -43,8 +46,10 @@ public class SecurityConfig {
                 .exceptionHandling().authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
                 .and()
                 .addFilterBefore(new TokenFilter(tokenService), UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(new ApiKeyFilter(apiChaves), UsernamePasswordAuthenticationFilter.class)
                 .authorizeRequests()
                 .antMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                .antMatchers(HttpMethod.GET, "/cliente/nuvem").hasAuthority(ApiKeyFilter.API_EXTERNA)
                 .antMatchers("/downloads/**").hasAuthority(TokenFilter.PUBLICAR_DOWNLOADS)
                 .antMatchers("/execucoes-tarefa/**", "/logs/**").hasAuthority(TokenFilter.VER_EXECUCOES)
                 .anyRequest().permitAll();

@@ -32,6 +32,9 @@ public class Cliente implements Serializable {
     private String numeroEndereco;
     @Column(name = "COMPLEMENTO_ENDERECO")
     private String complementoEndereco;
+    /** 'S' quando o cliente usa o sistema nuvem. */
+    @Column(name = "CLIENTE_NUVEM")
+    private String clienteNuvem = "N";
 
     @ManyToOne
     @JoinColumn(name = "COD_ENDERECO")

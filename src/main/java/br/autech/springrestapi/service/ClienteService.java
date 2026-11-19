@@ -1,6 +1,7 @@
 package br.autech.springrestapi.service;
 
 import br.autech.springrestapi.dtos.ClienteDTO;
+import br.autech.springrestapi.dtos.ClienteNuvemDTO;
 import br.autech.springrestapi.model.Cidade;
 import br.autech.springrestapi.model.Cliente;
 import br.autech.springrestapi.model.Endereco;
@@ -83,8 +84,23 @@ public class ClienteService {
         }
         cliente.setAtivo("S");
         cliente.setBloqueado("N");
+        cliente.setClienteNuvem(normalizarClienteNuvem(cliente.getClienteNuvem(), "N"));
 
         return clienteRepository.save(cliente);
+    }
+
+    /** Clientes que usam o sistema nuvem (CLIENTE_NUVEM = 'S'), ativos ou não. */
+    public List<ClienteNuvemDTO> listarClientesNuvem() {
+        return clienteRepository.buscarClientesNuvem();
+    }
+
+    /** Aceita 'S'/'N' em qualquer caixa; nulo ou vazio vira o valor padrão. */
+    private String normalizarClienteNuvem(String valor, String padrao) {
+        if (valor == null || valor.isBlank()) return padrao;
+        String v = valor.trim().toUpperCase();
+        if (!v.equals("S") && !v.equals("N"))
+            throw new BadRequestException("Valor inválido para clienteNuvem, utilize 'S' ou 'N'");
+        return v;
     }
 
     public List<Cliente> findAll() {
@@ -144,7 +160,9 @@ public class ClienteService {
     }
 
     public Cliente update(Cliente cliente) {
-        findByCnpjCpf(cliente.getCnpjCpf());
+        Cliente cadastrado = findByCnpjCpf(cliente.getCnpjCpf());
+        // Quem não manda o campo (telas antigas) mantém o valor gravado em vez de zerar a coluna NOT NULL
+        cliente.setClienteNuvem(normalizarClienteNuvem(cliente.getClienteNuvem(), cadastrado.getClienteNuvem()));
 
         if (cliente.getEndereco() != null && cliente.getEndereco().getCep().isEmpty())
             throw new BadRequestException("Informe o CEP do endereço");
