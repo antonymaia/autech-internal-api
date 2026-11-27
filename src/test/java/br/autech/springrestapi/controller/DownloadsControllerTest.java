@@ -9,6 +9,7 @@ import br.autech.springrestapi.service.ClienteService;
 import br.autech.springrestapi.service.DownloadsService;
 import br.autech.springrestapi.service.TokenService;
 import br.autech.springrestapi.service.exception.ConflitoException;
+import br.autech.springrestapi.service.exception.ObjectNotFoundException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -23,6 +24,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(DownloadsController.class)
@@ -100,5 +102,41 @@ class DownloadsControllerTest {
     void conflitoDa409() throws Exception {
         when(downloadsService.salvar(any(), any(), anyBoolean(), any())).thenThrow(new ConflitoException("existe"));
         mvc.perform(envio().header("Authorization", "Bearer " + token(true))).andExpect(status().isConflict());
+    }
+
+    @Test
+    void criarPastaSemTokenDa401() throws Exception {
+        mvc.perform(post("/downloads/pastas").param("nome", "2026")).andExpect(status().isUnauthorized());
+        verifyNoInteractions(downloadsService);
+    }
+
+    @Test
+    void criarPastaSemPermissaoDa403() throws Exception {
+        mvc.perform(post("/downloads/pastas").param("nome", "2026").header("Authorization", "Bearer " + token(false)))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(downloadsService);
+    }
+
+    @Test
+    void criaPastaDa201() throws Exception {
+        mvc.perform(post("/downloads/pastas").param("pasta", "manuais").param("nome", "2026")
+                        .header("Authorization", "Bearer " + token(true)))
+                .andExpect(status().isCreated());
+        verify(downloadsService).criarPasta("manuais", "2026", "fulano");
+    }
+
+    @Test
+    void criarPastaQueExisteDa409() throws Exception {
+        doThrow(new ConflitoException("existe")).when(downloadsService).criarPasta(any(), any(), any());
+        mvc.perform(post("/downloads/pastas").param("nome", "2026").header("Authorization", "Bearer " + token(true)))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void criarPastaEmDestinoInexistenteDa404() throws Exception {
+        doThrow(new ObjectNotFoundException("nao existe")).when(downloadsService).criarPasta(any(), any(), any());
+        mvc.perform(post("/downloads/pastas").param("pasta", "x").param("nome", "2026")
+                        .header("Authorization", "Bearer " + token(true)))
+                .andExpect(status().isNotFound());
     }
 }
