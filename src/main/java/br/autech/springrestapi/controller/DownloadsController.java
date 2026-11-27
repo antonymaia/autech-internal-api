@@ -14,7 +14,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 
-/** Publicação de arquivos no servidor de downloads. Exige o token de um usuário com PODE_PUBLICAR (SecurityConfig). */
+/** Publicação de arquivos e criação de pastas no servidor de downloads. Exige o token de um usuário com PODE_PUBLICAR (SecurityConfig). */
 @RestController
 @RequestMapping("/downloads")
 @RequiredArgsConstructor
@@ -30,5 +30,14 @@ public class DownloadsController {
                                        Authentication autenticacao) throws IOException {
         boolean substituiu = downloadsService.salvar(pasta, arquivo, substituir, autenticacao.getName());
         return ResponseEntity.status(substituiu ? HttpStatus.OK : HttpStatus.CREATED).build();
+    }
+
+    /** Cria a pasta `nome` dentro de `pasta` (vazia = raiz): 201; 409 = já existe; 404 = `pasta` não existe. */
+    @PostMapping("/pastas")
+    public ResponseEntity<Void> criarPasta(@RequestParam(defaultValue = "") String pasta,
+                                           @RequestParam String nome,
+                                           Authentication autenticacao) throws IOException {
+        downloadsService.criarPasta(pasta, nome, autenticacao.getName());
+        return ResponseEntity.status(HttpStatus.CREATED).build();
     }
 }

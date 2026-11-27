@@ -115,4 +115,50 @@ class DownloadsServiceTest {
         DownloadsService semRaiz = new DownloadsService("");
         assertThrows(InternalServerError.class, () -> semRaiz.salvar("", arquivo("x.txt", "x"), false, "teste"));
     }
+
+    @Test
+    void criaPastaDentroDeOutra() throws Exception {
+        service.criarPasta("apps", "Tabelas de Preço", "teste");
+        assertTrue(Files.isDirectory(raiz.resolve("apps/Tabelas de Preço")));
+    }
+
+    @Test
+    void criaPastaNaRaiz() throws Exception {
+        service.criarPasta("", "  manuais ", "teste");
+        assertTrue(Files.isDirectory(raiz.resolve("manuais")));
+    }
+
+    @Test
+    @DisabledOnOs(OS.WINDOWS)
+    void pastaCriadaFicaListavelParaONginx() throws Exception {
+        service.criarPasta("", "manuais", "teste");
+        assertEquals("rwxr-xr-x", PosixFilePermissions.toString(Files.getPosixFilePermissions(raiz.resolve("manuais"))));
+    }
+
+    @Test
+    void recusaPastaQueJaExiste() throws Exception {
+        assertThrows(ConflitoException.class, () -> service.criarPasta("apps", "android", "teste"));
+        service.salvar("", arquivo("manual.pdf", "x"), false, "teste");
+        assertThrows(ConflitoException.class, () -> service.criarPasta("", "manual.pdf", "teste"));
+    }
+
+    @Test
+    void naoCriaVariosNiveis() {
+        assertThrows(ObjectNotFoundException.class, () -> service.criarPasta("manuais", "2026", "teste"));
+        assertFalse(Files.exists(raiz.resolve("manuais")));
+    }
+
+    @Test
+    void naoCriaPastaForaDaRaiz() {
+        assertThrows(BadRequestException.class, () -> service.criarPasta("../", "fora", "teste"));
+        assertThrows(BadRequestException.class, () -> service.criarPasta(base.toString(), "fora", "teste"));
+        assertFalse(Files.exists(base.resolve("fora")));
+    }
+
+    @Test
+    void recusaNomesDePastaInvalidos() {
+        for (String nome : new String[]{"", "  ", ".oculta", "..", "fim.", "a/b", "a\\b", "a:b", "a?b"}) {
+            assertThrows(BadRequestException.class, () -> service.criarPasta("", nome, "teste"), nome);
+        }
+    }
 }

@@ -70,7 +70,7 @@ spring.profiles.active=dev
 
 Consumidores sem login (outras APIs e apps locais) usam chave de API no cabeçalho `X-API-Key`, validada pelo `ApiKeyFilter` (autoridade `API_EXTERNA`). As chaves ficam em `api.chaves` (`API_CHAVES`), no formato `consumidor:chave` separados por vírgula, cada chave com 32 caracteres ou mais. `GET /cliente/nuvem` (clientes com `CLIENTE_NUVEM = 'S'`, só `cnpjCpf` e `nome`) exige a chave; o token de colaborador não serve ali.
 
-`POST /downloads/arquivos` (multipart: `pasta`, `arquivo`, `substituir`) grava na pasta `downloads.raiz` (`DOWNLOADS_RAIZ`), servida pelo nginx de downloads.autech.net.br. Segredo do token: `jwt.secret` (`JWT_SECRET`).
+`POST /downloads/arquivos` (multipart: `pasta`, `arquivo`, `substituir`) grava na pasta `downloads.raiz` (`DOWNLOADS_RAIZ`), servida pelo nginx de downloads.autech.net.br. `POST /downloads/pastas` (`pasta`, `nome`) cria uma pasta, um nível por vez (201; 409 se o nome já existe; 404 se `pasta` não existe). O painel usa esses dois endpoints em vez do `MKCOL` do nginx, para não pedir a senha Basic do servidor de downloads. Segredo do token: `jwt.secret` (`JWT_SECRET`).
 
 ## Tarefas Agendadas
 

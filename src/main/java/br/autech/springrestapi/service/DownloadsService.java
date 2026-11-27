@@ -23,7 +23,7 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
- * Publica arquivos na pasta servida pelo nginx de downloads.autech.net.br (listagem em /api/arquivos/, download em
+ * Publica arquivos e cria pastas na pasta servida pelo nginx de downloads.autech.net.br (listagem em /api/arquivos/, download em
  * /downloads/). Só grava dentro de downloads.raiz.
  */
 @Slf4j
@@ -35,6 +35,7 @@ public class DownloadsService {
     private static final Set<String> EXTENSOES_BLOQUEADAS = Set.of("html", "htm", "xhtml", "svg", "js");
     private static final boolean POSIX = FileSystems.getDefault().supportedFileAttributeViews().contains("posix");
     private static final Set<PosixFilePermission> PERMISSAO_ARQUIVO = PosixFilePermissions.fromString("rw-r--r--");
+    private static final Set<PosixFilePermission> PERMISSAO_PASTA = PosixFilePermissions.fromString("rwxr-xr-x");
 
     private final String raiz;
 
@@ -50,17 +51,7 @@ public class DownloadsService {
     public boolean salvar(String pasta, MultipartFile arquivo, boolean substituir, String login) throws IOException {
         String nome = validarNome(arquivo.getOriginalFilename());
         Path raizReal = raizReal();
-        Path diretorio;
-        try {
-            diretorio = raizReal.resolve(pasta == null ? "" : pasta).normalize();
-        } catch (InvalidPathException e) {
-            throw new BadRequestException("Pasta inválida: " + pasta);
-        }
-        // Barra o "../" e o caminho absoluto ("/etc", "C:/...")
-        if (!diretorio.startsWith(raizReal)) throw new BadRequestException("Pasta inválida: " + pasta);
-        if (!Files.isDirectory(diretorio)) throw new ObjectNotFoundException("Pasta não encontrada: " + pasta);
-        // Barra o atalho (symlink) que aponta para fora da raiz
-        if (!diretorio.toRealPath().startsWith(raizReal)) throw new BadRequestException("Pasta inválida: " + pasta);
+        Path diretorio = pastaExistente(raizReal, pasta);
 
         Path destino = diretorio.resolve(nome);
         boolean existia = Files.exists(destino);
@@ -91,11 +82,59 @@ public class DownloadsService {
         return existia;
     }
 
+    /**
+     * Cria a pasta `nome` dentro de `pasta` (relativa à raiz; vazia = raiz). Um nível por vez: `pasta` já precisa
+     * existir.
+     */
+    public void criarPasta(String pasta, String nome, String login) throws IOException {
+        String nomeValido = validarNomePasta(nome);
+        Path raizReal = raizReal();
+        Path destino = pastaExistente(raizReal, pasta).resolve(nomeValido);
+        if (Files.isDirectory(destino)) throw new ConflitoException("Já existe uma pasta com esse nome");
+        if (Files.exists(destino)) throw new ConflitoException("Já existe um arquivo com esse nome");
+        try {
+            Files.createDirectory(destino);
+        } catch (FileAlreadyExistsException e) {
+            // Outra pessoa criou o mesmo nome nesse meio-tempo
+            throw new ConflitoException("Já existe uma pasta com esse nome");
+        }
+        // Com a umask do serviço a pasta pode nascer sem leitura para os outros: o nginx não listaria
+        if (POSIX) Files.setPosixFilePermissions(destino, PERMISSAO_PASTA);
+
+        log.info("[Downloads] {} criou a pasta {}", login, raizReal.relativize(destino));
+    }
+
+    /** `pasta` relativa à raiz, desde que exista e fique dentro dela. */
+    private Path pastaExistente(Path raizReal, String pasta) throws IOException {
+        Path diretorio;
+        try {
+            diretorio = raizReal.resolve(pasta == null ? "" : pasta).normalize();
+        } catch (InvalidPathException e) {
+            throw new BadRequestException("Pasta inválida: " + pasta);
+        }
+        // Barra o "../" e o caminho absoluto ("/etc", "C:/...")
+        if (!diretorio.startsWith(raizReal)) throw new BadRequestException("Pasta inválida: " + pasta);
+        if (!Files.isDirectory(diretorio)) throw new ObjectNotFoundException("Pasta não encontrada: " + pasta);
+        // Barra o atalho (symlink) que aponta para fora da raiz
+        if (!diretorio.toRealPath().startsWith(raizReal)) throw new BadRequestException("Pasta inválida: " + pasta);
+        return diretorio;
+    }
+
     private Path raizReal() throws IOException {
         if (raiz == null || raiz.isBlank()) {
             throw new InternalServerError("Pasta de downloads não configurada (downloads.raiz / DOWNLOADS_RAIZ)");
         }
         return Paths.get(raiz).toRealPath();
+    }
+
+    /** Sem ponto na frente (o nginx esconde) nem no fim (o Windows remove), sem barras e caracteres reservados. */
+    private String validarNomePasta(String original) {
+        String nome = original == null ? "" : original.trim();
+        if (nome.isEmpty() || nome.startsWith(".") || nome.endsWith(".") || nome.length() > 100
+                || CARACTERE_INVALIDO.matcher(nome).find()) {
+            throw new BadRequestException("Nome de pasta inválido: " + original);
+        }
+        return nome;
     }
 
     private String validarNome(String original) {
